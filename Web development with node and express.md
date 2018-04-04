@@ -70,7 +70,48 @@ La razón por la que no es recomendable servir ficheros estáticos es porque el 
 
 ### CAP 3 - Saving Time with Express
 
+**Scaffolding:** Se trata de la generación automática del esqueleto principal sobre el que construir la página. El primero en introducir algo así fue Ruby on Rails.
 
+Una vez tengamos creada la carpeta del proyecto (se recomienda tener un directorio site separado de documentación y otros ficheros referentes al proyecto), lanzamos el comando npm para inicializar el proyecto y generar el fichero *package.json*:
+``` javascript
+npm init
+```
+
+Lo siguiente que hacemos es instalar express:
+``` javascript
+npm install --save express
+```
+
+Para evitar que se sincronice con nuestro repositorio el directorio de módulos hay que crear el fichero *.gitignore* con el siguiente contenido:
+``` 
+# ignore packages installed by npm
+node_modules
+```
+
+Pese a lo que indican otros tutoriales de llamar al fichero principal *app.js* o *index.js*, él recomienda llamarlo como al nombre del proyecto para que así resulte más fácil distinguirlo de otros proyectos cuando tengamos abiertos varios en el editor. npm init utiliza *index.js* por defecto.
+
+El **puerto con el que escuchamos** en el servidor lo inicializamos con lo siguiente, utilizando la variable de entorno PORT y si no existe utilizaremos el 3000:
+```
+app.set(port, process.env.PORT || 3000)
+```
+
+
+
+
+
+
+
+
+### CAP 4 -
+
+
+### CAP 5 -
+
+
+### CAP 6 -
+
+
+### CAP 7 -
 
 
 
