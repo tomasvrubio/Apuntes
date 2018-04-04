@@ -95,8 +95,33 @@ El **puerto con el que escuchamos** en el servidor lo inicializamos con lo sigui
 app.set(port, process.env.PORT || 3000)
 ```
 
+Para añadir rutas que controlar utilizaremos **app.get**. Se puede utilizar con otros métodos (post, delete, ...). Tomaría cualquier url que entre dentro de la ruta especificada. El código se lee de arriba a abajo por lo que algo más específico debe ir arriba y más genérico abajo. Cuando se cumpla la ruta llamará a la función que indique pasándole los objetos de petición y de respuesta. Para responder utilizamos **res.send**, utilizando .type, .set y .status para indicar los distintos campos de la cabecera y poder enviarla. Por ejemplo:
+``` javascript
+app.get('/about', function(req, res){
+        res.type('text/plain');
+        res.send('About Meadowlark Travel');
+});
+```
 
+Para generar las páginas 404, 500, ... lo hacemos de manera diferente. Utilizamos **app.use** que es la manera que tiene Express de introducir middleware (en cap10). Habrá que poner estos .use detrás de los .get para que no impidan que se puedan comprobar dichas rutas. (Los errores se verán en profundidad en cap10 y cap12)
+``` javascript
+// custom 404 page
+app.use(function(req, res){
+        res.type('text/plain');
+        res.status(404);
+        res.send('404 - Not Found');
+});
 
+// custom 500 page
+app.use(function(err, req, res, next){
+        console.error(err.stack);
+        res.type('text/plain');
+        res.status(500);
+        res.send('500 - Server Error');
+});
+```
+
+De momento Express nos ahorra mucho del trabajo que tuvimos que estar haciendo en el capítulo anterior para poder parsear la url a algo que pudiesemos tratar.
 
 
 
