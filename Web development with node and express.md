@@ -242,6 +242,11 @@ app.get('/about', function(req, res) {
 
 ### CAP 5 - Quality assurance
 
+Tratando de conseguir que lo sincronice...
+
+
+
+
 
 ### CAP 6 -
 
