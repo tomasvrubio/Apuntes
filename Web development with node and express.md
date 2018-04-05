@@ -160,14 +160,87 @@ Para el manejo de estáticos haremos uso de un middleware, **static**. Le especi
 app.use(express.static(__dirname + '/public'));
 ```
 
+No hace falta especificar *public* ya que lo detectará automáticamente. Con indicar "/img/logo.png" es suficiente.
+
+Las vistas no sirven exclusivamente para entregar contenido estático sino que se pueden modificar dinámicamente. Si por ejemplo en *about.handlebars* modificamos para que tenga una parte variable:
+``` javascript
+<h1>About Meadowlark Travel</h1>
+
+<p>Your fortune for the day:</p>
+<blockquote>{{fortune}}</blockquote>
+```
+
+Ahora podemos modificar el punto de nuestra aplicación donde decidimos cuando se va a esa ruta y pasarle distintos valores de la siguiente manera:
+``` javascript
+app.get('/about', function(req, res){
+        var randomFortune =
+                fortunes[Math.floor(Math.random() * fortunes.length)];
+        res.render('about', { fortune: randomFortune });
+});
+``` 
+
+*Esta generación de páginas dinámicamente se verá en profundidad en el cap7.*
 
 
+### CAP 4 - Tidying up
+
+En este capítulo se enseñan buenas prácticas para llevar a cabo un proyecto. 
+
+La primera vez que haces algo, si lo haces bien te llevará quizás 5 veces más que si lo hubieras hecho chapuceramente. En cambio, cuanto más tengas que repetirlo mayor será la ventaja de haberlo hecho como es debido ya que te ahorrará trabajo. Practicar el hacer las cosas bien (perfectas) conseguirá que puedas perfeccionar tu labor, será tu rutina.
+
+Puntos favorables del **control de versiones**: 
+
+* Documentación: Poder volver atrás en el tiempo del proyecto te da idea de por qué se hicieron las cosas como se hicieron. 
+* Atribución: Si encuentras algo poco claro en el código en un proyecto entre distintas personas puedes ver quién lo introdujo/modificó y preguntarle.
+* Experimentación: Permite fácilmente crear ramas nuevas donde probar cosas. Si van bien puedes incorporarlo al proyecto, sino siempre puedes desechar la idea y volver a donde estabas.
+
+Con el fichero *.gitignore* conseguiremos evitar añadir ficheros que no deberíamos. Por cada línea podemos indicarle distintos ficheros o directorios que queremos excluir del control de versiones. Acepta comodines (por ejemplo para borrar backups podemos utilizar *\*~*). Interesa poner *node_modules* para que no los suba al repositorio. En los macs también hay que evitar *.DS_STORE*. Las máscaras de ficheros también afectan en los subdirectorios por lo que por ejemplo no se tendrán en cuenta tampoco ficheros de backup que haya dentro de un directorio.
+
+Crearemos las ramas de experimentación con el siguiente comando:
+```
+git checkout -b experiment
+```
+
+**NPM**: Los node_modules se indican en el *package.json*. El versionado de los paquetes se hace según las reglas de semver. Todos los paquetes de node que utilicemos deberán estar ahí para que posteriormente, cuando queramos utilizar la aplicación en otro PC podamos conseguir todos los paquetes necesarios con:
+```
+npm install
+```
+
+Los **metadatos del proyecto** se introducirán dentro del mismo fichero. Se puede ver como hay que indicarlos (al iniciarlo sale un formulario) en la [documentación de npm](https://docs.npmjs.com/getting-started/using-a-package.json).
+
+Otro fichero importante es **README.md** que contiene la información básica para que alguien nuevo en el proyecto pueda utilizarlo.
+
+Podemos crear **módulos propios**. No es recomendable hacerlo en *node_modules* sino en otro directorio para poder diferenciarlos. Recomendable hacerlo en *lib*. Por ejemplo creamos el fichero *lib/fortune.js* que contiene el código de nuestro módulo (sólo será visible lo que esté dentro de exports, el resto estará encapsulado y libre de que pueda ser modificado desde fuera):
+
+``` javascript
+var fortuneCookies = [
+        "Conquer your fears or they will conquer you.",
+        "Rivers need springs.",
+        "Do not fear what you don't know.",
+        "You will have a pleasant surprise.",
+        "Whenever possible, keep it simple.",
+];
+
+exports.getFortune = function() {
+        var idx = Math.floor(Math.random() * fortuneCookies.length);
+        return fortuneCookies[idx];
+};
+```
+
+Y requeriremos dicho módulo en nuestra aplicación principal:
+``` javascript
+var fortune = require('./lib/fortune.js');
+```
+
+Y luego podemos usar las funciones del módulo exportado:
+``` javascript
+app.get('/about', function(req, res) {
+        res.render('about', { fortune: fortune.getFortune() } );
+});
+```
 
 
-### CAP 4 -
-
-
-### CAP 5 -
+### CAP 5 - Quality assurance
 
 
 ### CAP 6 -
