@@ -267,7 +267,7 @@ Revisión de **técnicas** de QA:
 
 Puedes encargarte de parar y arrancar el servidor cada vez que hagas un cambio. O puedes delegar esto a herramientas para que si detectan un cambio reinicien el servidor. Ejemplo de ello son **nodemon** y **Grunt**. 
 
-######Page testing
+###### Page testing
 La recomendación es que introduzcas test en tus páginas mientras te encuentras desarrollando la aplicación. 
 
 Lo instalaremos como dependencia exclusiva para la parte de desarrollo, lo que evita tener esas dependencias en Producción:
@@ -275,32 +275,37 @@ Lo instalaremos como dependencia exclusiva para la parte de desarrollo, lo que e
 npm install --save-dev mocha
 ```
 
+Para poder realizar las pruebas en el cliente hay que mover los ficheros de mocha a la carpeta public. Lo ponemos en la carpeta vendor que es donde se debería poner código que no pertenece propiamente a la aplicación:
 
+``` javascript
+mkdir public/vendor
+cp node_modules/mocha/mocha.js public/vendor
+cp node_modules/mocha/mocha.css public/vendor
+```
 
+También necesitamos código que permita hacer asserts:
 
-######Cross-page testing
+``` javascript
+npm install --save-dev chai
+cp node_modules/chai/chai.js public/vendor
+```
 
-
-
-
-######Logic testing
-
-
-
-######Linting
-
-
-
-######Link Checking
-
-
-
-######Automatizando con Grunt
+Luego podemos poner código en nuestras vistas que se ejecute condicionalmente, sólo en caso de que queramos correr los test y pudiendo indicar que se haga sólo si es un entorno No Productivo.
 
 
 
 
-######Integración continua (CI)
+###### Cross-page testing
+
+###### Logic testing
+
+###### Linting
+
+###### Link Checking
+
+###### Automatizando con Grunt
+
+###### Integración continua (CI)
 
 
 
