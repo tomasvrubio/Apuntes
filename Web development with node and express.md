@@ -242,8 +242,65 @@ app.get('/about', function(req, res) {
 
 ### CAP 5 - Quality assurance
 
-Tratando de conseguir que lo sincronice...
+**¿Acaso hay alguien que no quiera calidad en su software?** Hay dos tipos de organizaciones, las que son grandes y tienen separado el rol de Desarrollo y el de Aseguramiento de Calidad (que muchas veces se ven como enemigos) y otras empresas donde los dos roles recaen sobre la misma persona (cuando hay prisa por lo general lo primero que no se hace es el QA). 
 
+¿Vale la pena el QA? Nadie quiere hacer un producto de calidad dudosa pero la presión por sacar un producto muchas veces es alta. 
+
+Los **puntos clave** de la QA son:
+
+* **Alcance:** Cuanta más gente llegue a tu sitio, mayor mercado tendrás al que vender tus productos. Posicionamiento (SEO). *Puede ser automatizado.*
+* **Funcionalidad:** Cuanto mejor sea la funcionalidad y cumpla con lo indicado más harás retener al usuario. *Muchas veces se puede automatizar.*
+* **Usabilidad:** Evalúa la interacción entre humano y máquina. ¿Es fácil de usar? Tienes que tener claro tu público objetivo. No es algo que se pueda automatizar, porque para eso necesitas un usuario, pero debes incluir pruebas de usuario.
+* **Estética:** El más subjetivo. Hay que enseñarlo para ver que opina la gente, teniendo en cuenta que no todo el mundo es igual.  
+
+Hay que tener una distinción clara entre lógica y presentación. Las cosas tienen que ser lo más claras o simples posibles en la parte lógica, mientras que en la de presentación tendrán que ser como se requiera. 
+
+**Dos tipos de test, unitarios y de integración**. Los unitarios revisan funcionalidades muy completas mientras que los de integración revisan una cadena de acciones o bien el sistema completo.
+
+Revisión de **técnicas** de QA:
+
+* **Page testing:** Testea la presentación y funcionalidad del frontend de la página. Puede requerir test unitarios y de integración. *Lo haremos con **Mocha**.*
+* **Cross-page testing:** Requiere ir navegando de una página a otra. Al requerir más de un componente por lo general cae dentro del rango de pruebas de integración. *Utilizaremos **zombie.js**.*
+* **Logic Testing:** Lanzará pruebas unitarias y de integración contra la parte lógica, el backend, desconectado de la capa de presentación.
+* **Linting:** No se trata de encontrar errores, sino errores potenciales. *Usaremos **JSHint** para ello*
+* **Link checking:** Test unitarios que comprueban que los link que contiene la página se encuentran disponibles. *Utilizaremos **LinkChecker**.*
+
+Puedes encargarte de parar y arrancar el servidor cada vez que hagas un cambio. O puedes delegar esto a herramientas para que si detectan un cambio reinicien el servidor. Ejemplo de ello son **nodemon** y **Grunt**. 
+
+######Page testing
+La recomendación es que introduzcas test en tus páginas mientras te encuentras desarrollando la aplicación. 
+
+Lo instalaremos como dependencia exclusiva para la parte de desarrollo, lo que evita tener esas dependencias en Producción:
+``` javascript
+npm install --save-dev mocha
+```
+
+
+
+
+######Cross-page testing
+
+
+
+
+######Logic testing
+
+
+
+######Linting
+
+
+
+######Link Checking
+
+
+
+######Automatizando con Grunt
+
+
+
+
+######Integración continua (CI)
 
 
 
