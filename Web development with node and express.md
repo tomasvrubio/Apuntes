@@ -290,27 +290,163 @@ npm install --save-dev chai
 cp node_modules/chai/chai.js public/vendor
 ```
 
-Luego podemos poner código en nuestras vistas que se ejecute condicionalmente, sólo en caso de que queramos correr los test y pudiendo indicar que se haga sólo si es un entorno No Productivo.
+Luego podemos poner código en nuestras vistas que se ejecute condicionalmente, solo en caso de que queramos correr los test y pudiendo indicar que se haga solo si es un entorno no Productivo. Lo indicaremos por ejemplo con el siguiente parámetro:
+``` javascript
+http://localhost:3000/?test=1
+``` 
 
+Con mocha puedes hacer test de distintas maneras:
 
+* BDD: Behaviour-driven development. Describes componentes y comportamientos, y los test comprueban esos comportamientos. 
+* TDD: Test-driven development. Defines unos test y unos resultados para esos test. Es la escogida en el libro. Un test de este estilo será por ejemplo (*test-global.js*):
+
+``` javascript
+suite('Global Tests', function(){
+  test('page has a valid title', function(){
+          assert(document.title && document.title.match(/\S/) &&
+                  document.title.toUpperCase() !== 'TODO');
+  });
+});
+```
+
+Puedes hacer tests que sean globales, que sirvan para cualquier página, o puedes hacer tests específicos para cada página.
 
 
 ###### Cross-page testing
 
+Se trata de simular el salto de unas páginas a otras. Para poder hacerlo sin tener que estar navegando a través de un navegador hay herramientas muy útiles como **zombie**. Para poder utilizarlo necesitaremos tener a mocha instalado globalmente y luego ejecutar el script creado:
+``` javascript
+var Browser = require('zombie'),
+        assert = require('chai').assert;
+
+var browser;
+
+suite('Cross-Page Tests', function(){
+
+        setup(function(){
+                browser = new Browser();
+        });
+
+        test('requesting a group rate quote     from the hood river tour page' +
+                'should populate the referrer field', function(done){
+                var referrer = 'http://localhost:3000/tours/hood-river';
+                browser.visit(referrer, function(){
+                        browser.clickLink('.requestGroupRate', function(){
+                                assert(browser.field('referrer').value
+                                        === referrer);
+                                done();
+                        });
+                });
+        });
+        
+        //... (otros test)
+```
+
+Lanzamos la prueba:
+``` javascript
+mocha -u tdd -R spec qa/tests-crosspage.js 2>/dev/null
+```
+
 ###### Logic testing
+
+También utilizamos **mocha** para realizar los test lógicos. Se trata de llamar a las funciones para ver si devuelven algún valor que concuerde con lo esperado con **chai**. Se crea el fichero 
+``` javascript
+var fortune = require('../lib/fortune.js');
+var expect = require('chai').expect;
+
+suite('Fortune cookie tests', function(){
+
+    test('getFortune() should return a fortune', function(){
+        expect(typeof fortune.getFortune() === 'string');
+    });
+
+});
+```
+
+Y lo ejecutamos con:
+``` javascript
+mocha -u tdd -R spec qa/tests-unit.js
+```
 
 ###### Linting
 
+Es como tener un segundo par de ojos que revise el código. En principio estaba **JSLint**, pero de él se generó **JSHint** que es el recomendado actualmente. Lo puedes instalar de manera global para ejecutarlo sobre scripts pero lo normal es que ya esté instalado e integrado en el editor que utilices.
+
 ###### Link Checking
+
+Se trata de comprobar que el sitio no tiene ningún link roto. Para ello instalamos el programa **LinkChecker** y pasamos el test:
+``` javascript
+linkchecker http://localhost:3000
+```
 
 ###### Automatizando con Grunt
 
+Todo lo que hemos estado viendo previamente es fácil de olvidar hacerlo. Para ello lo mejor es automatizarlo y para eso utilizaremos **Grunt**. 
+``` javascript
+sudo npm install -g grunt-cli
+npm install --save-dev grunt
+```
+
+Funciona mediante [plugins](https://gruntjs.com/plugins) para poder hacer cada tarea. Para casos en los que no exista plugin (por ejemplo LinkChecker) se utilizará un plugin genérico para ejecutar comandos de shell.
+``` javascript
+npm install --save-dev grunt-cafe-mocha
+npm install --save-dev grunt-contrib-jshint
+npm install --save-dev grunt-exec
+```
+
+Luego creamos un fichero *Gruntfile.js* en el directorio del proyecto que contendrá las distintas automatizaciones: 
+``` javascript
+module.exports = function(grunt){
+
+        // load plugins
+        [
+                'grunt-cafe-mocha',
+                'grunt-contrib-jshint',
+                'grunt-exec',
+        ].forEach(function(task){
+                grunt.loadNpmTasks(task);
+        });
+
+        // configure plugins
+        grunt.initConfig({
+                cafemocha: {
+                        all: { src: 'qa/tests-*.js', options: { ui: 'tdd' }, }
+                },
+                jshint: {
+                        app: ['meadowlark.js', 'public/js/**/*.js',
+                                'lib/**/*.js'],
+                        qa: ['Gruntfile.js', 'public/qa/**/*.js', 'qa/**/*.js'],
+                },
+                exec: {
+                        linkchecker:
+                                { cmd: 'linkchecker http://localhost:3000' }
+                },
+        });
+
+        // register tasks
+        grunt.registerTask('default', ['cafemocha','jshint','exec']);
+};
+``` 
+
+Con ese código, cuando ejecutemos el comando **grunt**, se ejecutará el grupo de tareas definido como *default*, que es el que se ejecuta cuando no se indica un grupo de tareas.
+
 ###### Integración continua (CI)
 
+Se trata de pasar automáticamente una serie de test cuando subes código a un servidor común. Es especialmente útil cuando trabajas en un equipo de varias personas pero no viene mal utilizarlo sólo para tener esa habilidad. Si falla enviará un email indicando que las cosas no están bien en el código subido. Es una manera de forzar a la gente a pasar todos los test antes de subir el código al repositorio. 
+
+Hay soluciones que se adaptan a tu repositorio de github y que son muy cómodas, como es **Travis CI**, pero también hay servidores de CI que puedes introducir en tu servidor como es el caso de **Jenkins** con un plugin para node.
 
 
 
-### CAP 6 -
+
+### CAP 6 - The Request and Response Objects
+
+Cuando construyes un servidor con Express prácticamente todo lo que haces empieza con un objeto petición y acaba en un objeto respuesta.
+
+Partes de la url (introducir imagen trozos de la url).
+
+
+
 
 
 ### CAP 7 -
