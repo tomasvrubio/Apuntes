@@ -445,12 +445,254 @@ Cuando construyes un servidor con Express prácticamente todo lo que haces empie
 
 Partes de la url (introducir imagen trozos de la url).
 
+Los **métodos HTTP**, que es la manera que tiene de comunicarse el cliente con el servidor: GET, POST, PUT, DELETE. La combinación de método, URL y parámetros es la manera en que la app determina como actuar. Con Express escribiremos handlers para los métodos que queramos controlar.
+
+Cabeceras:
+
+* **Petición:** Información que remite con la petición al servidor para indicar cosas como el idioma, el navegador, OS, hardware... Es el parámetro **headers**. Si quieres ver la cabecera que envías: 
+
+``` javascript
+app.get('/headers', function(req,res){
+    res.set('Content-Type','text/plain');
+    var s = '';
+    for(var name in req.headers) s += name + ': ' + req.headers[name] + '\n';
+    res.send(s);
+});
+```
+
+* **Respuesta:** El servidor también manda información al cliente que no será mostrada. Manda metadatos e información del servidor. Por ejemplo manda el content-type, que indica al navegador como debe interpretar los datos que reciba (priorizará lo que venga ahí a lo que indique con su extensión el objeto recibido). Puede indicar compresión, codificación. Para ver la cabecera de la respuesta puedes utilizar las **herramientas de desarrollo de chrome**. Para ocultar la información que mandas del servidor (y evitar puntos flacos que utilicen los hackers):
+
+``` javascript
+app.disable('x-powered-by');
+```
+
+**Content-type** viene marcado por *internet media type*, que consiste en un tipo, un subtipo y parámetros opcionales. Por ejemplo puede ser *text/html; charset=UTF-8*. 
+
+**Cuerpo de la respuesta:** Una petición GET no tiene cuerpo pero sin embargo una POST si. Hay varias maneras de pasar esa información (en la url separando cada parámetro con &, para subir archivos se suele hacer con multipart/form-data y con ajax se puede utilizar JSON). 
+
+**Objeto request:** Objeto con el que trabajaremos con la respuesta.  Se suele llamar req o request. Tiene todos los parámetros y métodos necesarios: parms, body, route, headers, cookies...
+
+**Objeto response:** Objeto que tienes para preparar la respuesta. Se suele llamar res, resp o response. Parámetros y métodos: status, set, cookie, send, redirect, type, download...
+
+Ejemplos de uso:
+
+Example 6-1. Basic usage
+``` javascript
+// basic usage
+app.get('/about', function(req, res){
+        res.render('about');
+});
+```
+
+Example 6-2. Response codes other than 200
+``` javascript
+app.get('/error', function(req, res){
+        res.status(500);
+        res.render('error');
+});
+// or on one line...
+app.get('/error', function(req, res){
+        res.status(500).render('error');
+});
+```
+
+Example 6-3. Passing a context to a view, including querystring, cookie, and session values
+``` javascript
+app.get('/greeting', function(req, res){
+        res.render('about', {
+                message: 'welcome',
+                style: req.query.style,
+                userid: req.cookie.userid,
+                username: req.session.username,
+        });
+});
+```
+
+Example 6-4. Rendering a view without a layout
+``` javascript
+// the following layout doesn't have a layout file, so views/no-layout.handlebars
+// must include all necessary HTML
+app.get('/no-layout', function(req, res){
+        res.render('no-layout', { layout: null });
+});
+```
+
+Example 6-5. Rendering a view with a custom layout
+``` javascript
+// the layout file views/layouts/custom.handlebars will be used
+app.get('/custom-layout', function(req, res){
+        res.render('custom-layout', { layout: 'custom' });
+});
+```
+
+Example 6-6. Rendering plaintext output
+``` javascript
+app.get('/test', function(req, res){
+        res.type('text/plain');
+        res.send('this is a test');
+});
+```
+
+Example 6-7. Adding an error handler
+``` javascript
+// this should appear AFTER all of your routes
+// note that even if you don't need the "next"
+// function, it must be included for Express
+// to recognize this as an error handler
+app.use(function(err, req, res, next){
+        console.error(err.stack);
+        res.status(500).render('error');
+});
+```
+
+Example 6-8. Adding a 404 handler
+``` javascript
+// this should appear AFTER all of your routes
+app.use(function(req, res){
+        res.status(404).render('not-found');
+});
+```
+
+Example 6-9. Basic form processing
+``` javascript
+// body-parser middleware must be linked in
+app.post('/process-contact', function(req, res){
+        console.log('Received contact from ' + req.body.name +
+                ' <' + req.body.email + '>');
+        // save to database....
+        res.redirect(303, '/thank-you');
+});
+```
+
+Example 6-10. More robust form processing
+``` javascript
+// body-parser middleware must be linked in
+app.post('/process-contact', function(req, res){
+        console.log('Received contact from ' + req.body.name +
+                ' <' + req.body.email + '>');
+        try {
+                // save to database....
+
+                return res.xhr ?
+                        res.render({ success: true }) :
+                        res.redirect(303, '/thank-you');
+        } catch(ex) {
+                return res.xhr ?
+                        res.json({ error: 'Database error.' }) :
+                        res.redirect(303, '/database-error');
+        }
+});
+```
+
+PROVIDING AN API
+When you’re providing an API, much like processing forms, the parameters will usually be in req.query, though you can also use req.body. What’s different about APIs is that you’ll usually be returning JSON, XML, or even plaintext, instead of HTML, and you’ll often be using less common HTTP methods like PUT, POST, and DELETE. Providing an API will be covered in Chapter 15. Examples 6-11 and 6-12 use the following “products” array (which would normally be retrieved from a database):
+```  javascript
+var tours = [
+        { id: 0, name: 'Hood River', price: 99.99 },
+        { id: 1, name: 'Oregon Coast', price: 149.95 },
+];
+```
+
+NOTE
+The term “endpoint” is often used to describe a single function in an API.
+
+Example 6-11. Simple GET endpoint returning only JSON
+``` javascript
+app.get('/api/tours'), function(req, res){
+        res.json(tours);
+});
+```
+
+Example 6-12. GET endpoint that returns JSON, XML, or text
+``` javascript
+app.get('/api/tours', function(req, res){
+        var toursXml = '<?xml version="1.0"?><tours>' +
+                products.map(function(p){
+                        return '<tour price="' + p.price +
+                                '" id="' + p.id + '">' + p.name + '</tour>';
+                }).join('') + '</tours>'';
+        var toursText = tours.map(function(p){
+                        return p.id + ': ' + p.name + ' (' + p.price + ')';
+                }).join('\n');
+        res.format({
+                'application/json': function(){
+                        res.json(tours);
+                },
+                'application/xml': function(){
+                        res.type('application/xml');
+                        res.send(toursXml);
+                },
+                'text/xml': function(){
+                        res.type('text/xml');
+                        res.send(toursXml);
+                }
+                'text/plain': function(){
+                        res.type('text/plain');
+                        res.send(toursXml);
+                }
+        });
+});
+```
+
+Example 6-13. PUT endpoint for updating
+``` javascript
+// API that updates a tour and returns JSON; params are passed using querystring
+app.put('/api/tour/:id', function(req, res){
+        var p = tours.some(function(p){ return p.id == req.params.id });
+        if( p ) {
+                if( req.query.name ) p.name = req.query.name;
+                if( req.query.price ) p.price = req.query.price;
+                res.json({success: true});
+        } else {
+                res.json({error: 'No such tour exists.'});
+        }
+});
+```
+
+Example 6-14. DEL endpoint for deleting
+``` javascript
+// API that deletes a product
+api.del('/api/tour/:id', function(req, res){
+        var i;
+        for( var i=tours.length-1; i>=0; i-- )
+                if( tours[i].id == req.params.id ) break;
+        if( i>=0 ) {
+                tours.splice(i, 1);
+                res.json({success: true});
+        } else {
+                res.json({error: 'No such tour exists.'});
+        }
+});
+```
+
+### CAP 7 - Templating with Handlebars
+
+Si no haces uso de plantillas, es de las cosas más valiosas que vas a obtener de este libro. Es la manera en la que puedes escribir en el lenguaje destino mientras que sigues teniendo la habilidad de insertar datos de manera dinámica.
+``` javascript
+<h1>Much Better</h1>
+<p>No <span class="code">document.write</span> here!</p>
+<p>Today's date is {{today}}.</p>
+```
+
+**Escoger un motor de plantillas:** Algunos de los criterios que nos pueden ayudar a decidir entre uno y otro son el rendimiento, si queremos que se puedan utilizar tanto en cliente como en servidor o la abstracción a la hora de tener que trabajar con el HTML. El autor del libro elige **handlebars**.
+
+
+### CAP 8 -
 
 
 
+### CAP 9 -
 
-### CAP 7 -
 
+
+### CAP 10 -
+
+
+
+### CAP 11 -
+
+
+### CAP 12 -
 
 
 ### DUDAS: 
