@@ -676,6 +676,113 @@ Si no haces uso de plantillas, es de las cosas más valiosas que vas a obtener d
 
 **Escoger un motor de plantillas:** Algunos de los criterios que nos pueden ayudar a decidir entre uno y otro son el rendimiento, si queremos que se puedan utilizar tanto en cliente como en servidor o la abstracción a la hora de tener que trabajar con el HTML. El autor del libro elige **handlebars**.
 
+Para entender el trabajo con plantillas hay que entender el **contexto**. Cuando renderizas una plantilla le pasas un objeto contexto que es lo que contiene la información para completar los datos a reemplazar. 
+
+>Meter imagen WDNE-handlebars.png
+
+Los comentarios van de la siguiente manera (los super-secretos no saldrán del servidor): 
+```
+{{! super-secret comment }}
+<!-- not-so-secret comment -->
+``` 
+
+Podemos enviar contextos como el siguiente:
+```
+{
+        currency: {
+                name: 'United States dollars',
+                abbrev: 'USD',
+        },
+        tours: [
+                { name: 'Hood River', price: '$99.95' },
+                { name: 'Oregon Coast', price, '$159.95' },
+        ],
+        specialsUrl: '/january-specials',
+        currencies: [ 'USD', 'GBP', 'BTC' ],
+}
+```
+
+Con ese contexto podemos crear código que se ejecute con **condicionales**, **en bucles** hasta mostrar todos los casos (para acceder a parámetros de fuera del caso en el que estamos darse cuenta que lo hace con **../** para volver a un nivel anterior), podemos acceder a **propiedades de objetos** si es lo que se nos pasa.
+```
+<ul>
+        {{#each tours}}
+                {{! I'm in a new block...and the context has changed }}
+                <li>
+                        {{name}} - {{price}}
+                        {{#if ../currencies}}
+                                ({{../../currency.abbrev}})
+                        {{/if}}
+                </li>
+        {{/each}}
+</ul>
+{{#unless currencies}}
+        <p>All prices in {{currency.name}}.</p>
+{{/unless}}
+{{#if specialsUrl}}
+        {{! I'm in a new block...but the context hasn't changed (sortof) }}
+        <p>Check out our <a href="{{specialsUrl}}">specials!</p>
+{{else}}
+        <p>Please check back often for specials.</p>
+{{/if}}
+<p>
+        {{#each currencies}}
+                <a href="#" class="currency">{{.}}</a>
+        {{else}}
+                Unfortunately, we currently only accept {{currency.name}}.
+        {{/each}}
+</p>
+```
+
+Tanto con if como con each se puede utilizar **else**, ejecutándose para each cuando no hay ningún caso disponible. También tenemos **unless** que es como if pero sólamente se ejecuta si el argumento es falso.
+
+Por último con **{{.}}** nos referimos al contexto actual (por ejemplo para utilizarlo con each). Es útil cuando tengamos una función y una propiedad con el mismo nombre:
+
+>Accessing the current context with a lone period has another use: it can distinguish helpers (which we’ll learn about soon) from properties of the current context. For example, if you have a helper called foo and a property in the current context called foo, {{foo}} refers to the helper, and {{./foo}} refers to the property.
+
+##### Server-Side Templating
+Además de ocultarle código al usuario podemos cachear plantillas ya generadas reduciendo el tiempo de entrega. Por defecto viene desactivado en Desarrollo y activado en Producción. Para activarlo explícitamente tendremos que poner: 
+```
+app.set('view cache', true);.
+```
+
+Por defecto no viene el soporte con Express por lo que tenemos que instalarlo:
+```
+npm install --save express3-handlebars
+```
+
+Y enlazarlo desde nuestro código:
+```
+var handlebars = require('express3-handlebars')
+        .create({ defaultLayout: 'main' });
+app.engine('handlebars', handlebars.engine);
+app.set('view engine', 'handlebars');
+```
+
+**View:** Normalmente representa una página individual dentro de un sitio web. Express busca por defecto las vistas en el directorio *views*.
+
+**Layout:** Es un tipo especial de vista. Es una plantilla para plantillas. Es la manera de hacer que todas las páginas de un mismo sitio se vean similar sin tener que repetir el mismo código en todas. Un ejemplo es (utilizamos tres "{{{" para que interprete bien el código HTML que tendrán las vistas):
+
+``` 
+<!doctype>
+<html>
+<head>
+        <title>Meadowlark Travel</title>
+        <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+        {{{body}}}
+</body>
+</html>
+```
+
+
+
+
+
+
+##### Client-Side Templating
+
+
 
 ### CAP 8 -
 
