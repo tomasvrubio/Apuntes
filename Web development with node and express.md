@@ -760,7 +760,7 @@ app.set('view engine', 'handlebars');
 
 **View:** Normalmente representa una página individual dentro de un sitio web. Express busca por defecto las vistas en el directorio *views*.
 
-**Layout:** Es un tipo especial de vista. Es una plantilla para plantillas. Es la manera de hacer que todas las páginas de un mismo sitio se vean similar sin tener que repetir el mismo código en todas. Un ejemplo es (utilizamos tres "{{{" para que interprete bien el código HTML que tendrán las vistas):
+**Layout:** Es un tipo especial de vista. Es una plantilla para plantillas. Es la manera de hacer que todas las páginas de un mismo sitio se vean similar sin tener que repetir el mismo código en todas. Los elementos comunes (footer, header, ...) suelen estar en el layout. Un ejemplo es (utilizamos tres "{{{" para que interprete bien el código HTML que tendrán las vistas):
 
 ``` 
 <!doctype>
@@ -775,16 +775,123 @@ app.set('view engine', 'handlebars');
 </html>
 ```
 
+El orden de renderizado es que primero se hace la parte de la vista (view) y luego la del layout con lo que se ha generado.
 
+El layout que se utilizará se define al cargar el módulo de handlebars (*main.handlebars* en *views/layouts/*):
+```
+var handlebars = require('express3-handlebars')
+        .create({ defaultLayout: 'main' });
+```
 
+Si quieres utilizar otro layout (para no utilizar ninguno pondríamos null) para una vista en concreto:
+```
+app.get('/foo', function(req, res){
+        res.render('foo', { layout: 'microsite' });
+});
+```
 
+Hay que buscar un equilibrio entre tener un único layout que contenga todo (lo más fácil de mantener) a tener distintos layouts para distintas páginas con pequeñas variaciones (más costoso de mantener).
 
+**Partial:** Se utiliza cuando quieres generar un parte de un página y que pueda ser reutilizable entre páginas (también se denominan **widgets**). Por ejemplo se puede utilizar para mostrar un cuadrito con el tiempo que hace y ponerlo en una misma página con distintas ciudades del mundo. Para incluirlo en una vista tienes que poner (teniendo el fichero *partial_name.handlebars* en *views/partials/*):
+```
+{{> partial_name}}
+```
+
+Los partials permiten subdirectorios por lo que si tienes muchos los puedes separar por temáticas e incluir dicho directorio cuando lo llames desde una vista.
+
+**Sections:** Gracias a los helpers podemos tener distintas secciones a modificar dentro de un layout:
+```
+var handlebars = require('express3-handlebars').create({
+    defaultLayout:'main',
+    helpers: {
+        section: function(name, options){
+            if(!this._sections) this._sections = {};
+            this._sections[name] = options.fn(this);
+            return null;
+        }
+    }
+});
+```
+
+Ahora usamos el helper **section** en la vista:
+```
+{{#section 'head'}}
+        <!-- we want Google to ignore this page -->
+        <meta name="robots" content="noindex">
+{{/section}}
+
+<h1>Test Page</h1>
+<p>We're testing some jQuery stuff.</p>
+
+{{#section 'jquery'}}
+        <script>
+                $('document').ready(function(){
+                        $('h1').html('jQuery Works');
+                });
+        </script>
+{{/section}}
+``` 
+
+Y en nuestro layout ponemos esas secciones tal y como se hace con body:
+```
+<!doctype html>
+<html>
+<head>
+        <title>Meadowlark Travel</title>
+        {{{_sections.head}}}
+</head>
+<body>
+        {{{body}}}
+        <script src="http://code.jquery.com/jquery-2.0.2.min.js"></script>
+        {{{_sections.jquery}}}
+</body>
+</html>
+```
 
 ##### Client-Side Templating
+Útil cuando quieres tener contenido dinámico. Es especialmente útil cuando nos vamos a comunicar con APIs de terceros y nos devuelvan los datos con JSON. 
 
 
 
-### CAP 8 -
+### CAP 8 -	Form Handling
+
+En este capítulo vemos la manera de manejar formularios, validarlos y subir ficheros. 
+
+Hay dos maneras de mandar información desde el usuario al servidor: GET y POST. Con GET iría en la URL y con POST va en el cuerpo de la respuesta. Las dos son iguales de seguras si se usa HTTPS y de inseguras si se utiliza HTTP, lo que pasa es que con GET el usuario puede ver toda la información en la querystring de la URL. Además el tamaño de la URL tiene un límite por lo que es recomendable utilizar POST para enviar formularios. 
+
+Un ejemplo sencillo de formulario sería:
+```
+<form action="/process" method="POST">
+    <input type="hidden" name="hush" val="hidden, but not secret!">
+    <div>
+        <label for="fieldColor">Your favorite color: </label>
+        <input type="text" id="fieldColor" name="color">
+    </div>
+    <div>
+        <button type="submit">Submit</button>
+    </div>
+</form>
+```
+
+El método (**method**) que viene indicado es POST. Si no indicas nada el por defecto es GET. El atributo **action** indica la URL a la que se mandará el formulario, y si no viene indicado será la URL desde la que se cargó (recomendable siempre poner un valor). El campo **name** es la manera en que identifica a los campos el servidor.
+
+Es posible tener dos formularios en una misma página (por ejemplo uno para hacer búsquedas y otro para hacer login). 
+
+Si no estás utilizando AJAX, suscribirás el formulario a través del navegador y la web se refrescará, estando determinado el comportamiento por el path de respuesta y por el contenido de la respuesta. Si mandas la información con POST puedes utilizar la misma URL ya que al utilizar distinto método que cuando recuperaste la información de la página puedes hacer cosas diferentes. Otra opción es utilizar un path diferente (por ejemplo /contact pasa a ser /process-contact). La segunda opción es mejor si tienes la opción de mandar ese formulario desde distintas URLs.
+
+Para contestar al cliente con la información que haya pasado del formulario lo mejor es utilizar un **303 redirect**. Opciones de redirección:
+
+* **Página de éxito/fracaso:** En función de si ha salido bien el tratamiento de los datos se manda a una página u otra. Viene bien porque en función de las peticiones que recibimos en cada página podemos saber el funcionamiento del servidor pero lo malo es que supone mantener todas esas páginas y que el usuario tendrá que volver atrás para estar donde estaban o ir a otro lado.
+* **Mismo sitio con un mensaje:** Mandar a la misma web en que te encuentras pero poner un mensaje flash indicando al usuario que se ha recibido la información. La mejor opción es tener un campo oculto en el formulario que utilicemos para remitir la URL en la que nos encontramos y que así nos lleve allí otra vez.
+* **Distinto sitio con un mensaje:** Cuando son formularios grandes generalmente no quieres volver al mismo sitio en el que te encontrabas. Por ejemplo cuando rellenas la información de un elemento lo normal es que cuando suscribas esa información la página a la que se te envíe sea en la que se listan todos los elementos y salga un mensaje que te indique que se ha registrado la información.
+
+
+##### Manejar formularios con Express
+
+
+
+
+
 
 
 
