@@ -888,11 +888,196 @@ Para contestar al cliente con la información que haya pasado del formulario lo 
 
 ##### Manejar formularios con Express
 
+Si utilizas **GET** tendrás los campos del formulario en el objeto **req.query**.
+
+Si utilizas **POST** tendrás que utilizar un middleware para parsear la información enviada. Utilizamos el módulo **body-parser** (npm install --save body-parser):
+```
+app.use(require('body-parser')());
+```
+
+Tras ello podremos hacer uso de **req.body** para acceder a toda la información. Vamos a hacer un ejemplo para que el usuario se añada a una lista de emails. Contenido de */views/newsletter.handlebars*:
+```
+<h2>Sign up for our newsletter to receive news and specials!</h2>
+<form class="form-horizontal" role="form"
+        action="/process?form=newsletter" method="POST">
+    <input type="hidden" name="_csrf" value="{{csrf}}">
+    <div class="form-group">
+        <label for="fieldName" class="col-sm-2 control-label">Name</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control"
+            id="fieldName" name="name">
+        </div>
+    </div>
+    <div class="form-group">
+        <label for="fieldEmail" class="col-sm-2 control-label">Email</label>
+        <div class="col-sm-4">
+            <input type="email" class="form-control" required
+                id="fieldName" name="email">
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="col-sm-offset-2 col-sm-4">
+            <button type="submit" class="btn btn-default">Register</button>
+        </div>
+    </div>
+</form>
+```
+
+Y el código para poder acceder a los datos del usuario desde el servidor:
+```
+app.use(require('body-parser')());
+
+app.get('/newsletter', function(req, res){
+    // we will learn about CSRF later...for now, we just
+    // provide a dummy value
+    res.render('newsletter', { csrf: 'CSRF token goes here' });
+});
+
+app.post('/process', function(req, res){
+    console.log('Form (from querystring): ' + req.query.form);
+    console.log('CSRF token (from hidden form field): ' + req.body._csrf);
+    console.log('Name (from visible form field): ' + req.body.name);
+    console.log('Email (from visible form field): ' + req.body.email);
+    res.redirect(303, '/thank-you');
+});
+```
+
+Es importante utilizar un 303 en la respuesta (y no un 301) para que redirija pero no cachee el navegador esa redirección y tenga que preguntar en siguientes ejecuciones al servidor. 
 
 
+##### Manejar formularios AJAX
+
+Podemos manejar muy fácilmente información enviada con AJAX. HTML:
+```
+<div class="formContainer">
+    <form class="form-horizontal newsletterForm" role="form"
+            action="/process?form=newsletter" method="POST">
+        <input type="hidden" name="_csrf" value="{{csrf}}">
+        <div class="form-group">
+            <label for="fieldName" class="col-sm-2 control-label">Name</label>
+            <div class="col-sm-4">
+                <input type="text" class="form-control"
+                id="fieldName" name="name">
+            </div>
+        </div>
+        <div class="form-group">
+            <label for="fieldEmail" class="col-sm-2 control-label">Email</label>
+            <div class="col-sm-4">
+                <input type="email" class="form-control" required
+                    id="fieldName" name="email">
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="col-sm-offset-2 col-sm-4">
+                <button type="submit" class="btn btn-default">Register</button>
+            </div>
+        </div>
+    </form>
+</div>
+{{#section 'jquery'}}
+    <script>
+        $(document).ready(function(){
+            $('.newsletterForm').on('submit', function(evt){
+                evt.preventDefault();
+                var action = $(this).attr('action');
+                var $container = $(this).closest('.formContainer');
+                $.ajax({
+                    url: action,
+                    type: 'POST',
+                    success: function(data){
+                        if(data.success){
+                            $container.html('<h2>Thank you!</h2>');
+                        } else {
+                            $container.html('There was a problem.');
+                        }
+                    },
+                    error: function(){
+                        $container.html('There was a problem.');
+                    }
+                });
+            });
+        });
+    </script>
+{{/section}}
+```
+
+Y el código de la aplicación:
+```
+app.post('/process', function(req, res){
+    if(req.xhr || req.accepts('json,html')==='json'){
+        // if there were an error, we would send { error: 'error description' }
+        res.send({ success: true });
+    } else {
+        // if there were an error, we would redirect to an error page
+        res.redirect(303, '/thank-you');
+    }
+});
+```
 
 
+##### Subida de ficheros
 
+Para manejar esas subidas utilizaremos el middleware **formidable** (npm install --save formidable), que nos permitirá acceder a los ficheros. Primero el HTML con el formulario:
+```
+<form class="form-horizontal" role="form"
+        enctype="multipart/form-data" method="POST"
+        action="/contest/vacation-photo/{year}/{month}">
+    <div class="form-group">
+        <label for="fieldName" class="col-sm-2 control-label">Name</label>
+        <div class="col-sm-4">
+            <input type="text" class="form-control"
+            id="fieldName" name="name">
+        </div>
+    </div>
+    <div class="form-group">
+        <label for="fieldEmail" class="col-sm-2 control-label">Email</label>
+        <div class="col-sm-4">
+            <input type="email" class="form-control" required
+                id="fieldName" name="email">
+        </div>
+    </div>
+    <div class="form-group">
+        <label for="fieldPhoto" class="col-sm-2 control-label">Vacation photo
+        </label>
+        <div class="col-sm-4">
+            <input type="file" class="form-control" required accept="image/*"
+                id="fieldPhoto" name="photo">
+        </div>
+    </div>
+    <div class="form-group">
+        <div class="col-sm-offset-2 col-sm-4">
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </div>
+    </div>
+</form>
+```
+
+Hay que indicar enctype="multipart/form-data" y también restringimos los tipos de fichero a subir con el atributo accept. Y luego el código de la aplicación:
+```
+var formidable = require('formidable');
+
+app.get('/contest/vacation-photo',function(req,res){
+    var now = new Date();
+    res.render('contest/vacation-photo',{
+        year: now.getFullYear(),month: now.getMont()
+    });
+});
+
+app.post('/contest/vacation-photo/:year/:month', function(req, res){
+    var form = new formidable.IncomingForm();
+    form.parse(req, function(err, fields, files){
+        if(err) return res.redirect(303, '/error');
+        console.log('received fields:');
+        console.log(fields);
+        console.log('received files:');
+        console.log(files);
+        res.redirect(303, '/thank-you');
+    });
+});
+```
+
+**Subida de ficheros con jQUERY**
+Si quieres ofrecer una experiencia de usuario a la hora de subir ficheros que permita drag&drop, ver miniaturas de los ficheros subidos, saber el porcentaje completado... recomienda utilizar la solución de la [siguiente URL](http://blueimp.github.io/jQuery-File-Upload/).
 
 
 ### CAP 9 -
