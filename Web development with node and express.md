@@ -1140,10 +1140,32 @@ res.clearCookie('monster');
 
 Son una manera más conveniente de mantener el estado. Se almacena información un poco de información en el cliente y se manda un identificador al servidor para que este pueda reconocer al usuario y mande la información que le corresponda. 
 
+Si quieres guardar datos de sesión en el servidor tienes que elegir como guardarla. El nivel básico es almacenarla en memoria, que es muy fácil de configurar pero tiene como pega que se pierde la información al reiniciar el servidor. Tampoco es una solución que sirva cuando tiene múltiples servidores, ya que depende de en que servidor caigas tendrá la información del usuario o no la tendrá. (En el cap13 veremos como almacenarla permanentemente).
+
+Necesitamos el módulo **express-session** (npm install --save express-session), y luego lo referenciamos tras llamar a cookie-parser:
+```
+app.use(require('cookie-parser')(credentials.cookieSecret));
+app.use(require('express-session')());
+```
+
+Este middleware tiene las siguientes opciones: **key** (el nombre de la cookie que almacenará el identificador de sesión), **store** (donde se almacena la información, siendo por defecto MemoryStore) y **cookie** (los parámetros que vimos en el apartado anterior concernientes a las cookies).
+
+**Para usar las propiedades de la sesión** lo hacemos todo bajo el objeto **request** y sus atributos:
+```
+req.session.userName = 'Anonymous';
+var colorScheme = req.session.colorScheme || 'dark';
+```
+
+Y para borrar información y eliminar la sesión:
+```
+req.session.userName = null;	// this sets 'userName' to null, but doesn't remove it
+delete req.session.colorScheme;	// this removes 'colorScheme'
+```
+
+> Al final junta esto con los flash messages en función de la información de la sesión. Ver en casa el ejemplo práctico y sacarlo en claro viendo el funcionamiento.
 
 
-
-### CAP 10 -
+### CAP 10 - Middleware
 
 
 
