@@ -1080,7 +1080,66 @@ app.post('/contest/vacation-photo/:year/:month', function(req, res){
 Si quieres ofrecer una experiencia de usuario a la hora de subir ficheros que permita drag&drop, ver miniaturas de los ficheros subidos, saber el porcentaje completado... recomienda utilizar la solución de la [siguiente URL](http://blueimp.github.io/jQuery-File-Upload/).
 
 
-### CAP 9 -
+### CAP 9 - Cookies and Sessions
+
+HTTP es un protocolo que no contiene estado. Si se quedase ahí significaría que no se podría hacer login en las páginas, que no se podría hacer streaming... Para que sea posible entran a escena las **cookies** y las **sesiones**.
+
+##### Cookies
+
+Tienen mala fama debido al uso que se ha dado de ellas pero son imprescindibles para la web moderna (aunque local storage de HTML5 puede cubrir parte de su funcionalidad).
+
+Su idea es simple: el servidor envía información y el navegador la almacena por un periodo de tiempo configurable. Hay varios puntos clave que conocer:
+
+* **Cookies are note secret from the user:** Todas las cookies que envías están disponibles para observar por el cliente. Se pueden firmar pero no se pueden encriptar (ni tiene sentido).
+* **The user can delete or disallow cookies:** Más allá de estar realizando pruebas no es normal que haga uso de ello el usuario.
+* **Regular cookies can be tampered with:** Recomendable utilizar cookies firmadas para evitar ataques.
+* **Cookies can be used for attacks:** Los hackers utilizan las cookies de vuelta al servidor para realizar ataques XSS. Para hacerlas más seguras se puede indicar que sólo puedan ser modificadas por el servidor y que vayan firmadas.
+* **Users will notice if you abuse cookies:** Hay que tratar de mantenerlas al mínimo.
+* **Prefer sessions over cookies:** Para casi todo puedes utilizar sesiones para mantener el estado y olvidarte de practicamente todos estos problemas. Se basan en las cookies pero con las sesiones Express hará todo el trabajo pesado.
+
+**Credenciales**
+Para hacer las cookies seguras hay que asignarles una clave con las que las firmaremos. Puede ser un string random, pero hay que almacenarlo. Para ello crearemos un fichero *credentials.js*, que contendrá esta y otra información de acceso, que mantendremos fuera de nuestro repositorio (incluyéndolo dentro de *.gitignore*):
+```
+module.exports = {
+    cookieSecret: 'your cookie secret goes here',
+};
+```
+
+Luego cargaremos esa clave desde nuestra aplicación:
+```
+var credentials = require('./credentials.js');
+```
+
+**Cookies en Express**
+Necesitamos el middleware correspondiente **cookie-parse** (npm install --save cookie-parser). Para incluirlo:
+```
+app.use(require('cookie-parser')(credentials.cookieSecret));
+``` 
+
+Y luego podemos crear cookies firmadas o sin firmar:
+```
+res.cookie('monster', 'nom nom');
+res.cookie('signed_monster', 'nom nom', { signed: true });
+``` 
+
+Para recuperar información de la cookie devuelta por el usuario accedemos a las propiedades del objeto request:
+```
+var monster = req.cookies.monster;
+var signedMonster = req.signedCookies.monster;
+``` 
+
+Y para borrarla:
+```
+res.clearCookie('monster');
+``` 
+
+**Opciones** que se pueden especificar al crearla: **domain** (dominio con el que se asocia, no se puede indicar uno distinto al que corre el servidor), **path** (path del sitio en el que se aplica), **maxAge** (tiempo de vida de la cookie en el cliente en ms), **secure** (sólo se puede enviar por https), **httpOnly** (sólo puede ser modificada por el servidor para prevenir XSS) y **signed** (se firmará).
+
+
+##### Sessions
+
+Son una manera más conveniente de mantener el estado. Se almacena información un poco de información en el cliente y se manda un identificador al servidor para que este pueda reconocer al usuario y mande la información que le corresponda. 
+
 
 
 
