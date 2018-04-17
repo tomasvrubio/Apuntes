@@ -16,7 +16,7 @@ Express está inspirado en Sinatra de Ruby. Además está muy relacionado con Co
 
 Node, al igual que express, está hecho para ser sencillo de levantar y configurar. Otra de las características únicas es que corre en un único hilo de ejecución. El resto de tecnologías multi-hilo son muy potentes pero son difíciles de configurar para poder utilizar al máximo el hardware sobre el que se ejecuten. 
 
-En este libro se referirá a "JavaScript stack" por lo que incluya a Node, Express y MongoDB. 
+En este libro se referirá a "JavaScript stack" en lo referente a a Node, Express y MongoDB. 
 
 Licencias: Al utilizar multitud de paquetes con npm puede ser complicado saber que licencia utilizar. Lo más fácil es utilizar la licencia MIT ya que tiene un rango muy amplio. De todos modos podemos utilizar herramientas para saber que licencia tienen los paquetes que utilizamos y sus dependencias como license-sniffer o license-spelunker. También es típico utilizar varias licencias con el proyecto para no cerrar puertas a proyectos que luego encadenen con ese. Por ejemplo está bien licenciar con GPL y MIT.
 
