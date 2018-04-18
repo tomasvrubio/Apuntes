@@ -1167,9 +1167,218 @@ delete req.session.colorScheme;	// this removes 'colorScheme'
 
 ### CAP 10 - Middleware
 
+Middleware es encapsular una funcionalidad que se ejecutará cuando llegue una petición a tu aplicación. Se trata de una función con tres argumentos: request object, response object y función next. Hay otra forma que tiene un cuarto argumento y entonces el primero pasa a ser para tratar los errores.
+
+El middleware es como si fuera una tubería en el que unas cosas se van ejecutando tras otras. La parte importante de la analogía es que **el orden importa**. Insertas el middleware haciendo uso de **app.use**.
+
+Se pueden unir los **router** y los **use**. A partir de Express 4.0 el orden en que se invocan cuando están los dos relacionados se mantiene, haciendo más fácil entender el funcionamiento de la secuencia.
+
+Es típico acabar la cadena de middleware con un handler que se encargue de coger cualquier tipo de respuesta para acabar devolviendo un 404 en caso de no haber podido manejar previamente la petición. Se pasa de un middleware a otro con la función **next()**, terminando en el que nos encontramos si no se llama a la función. En ese momento se le deberá enviar una respuesta al cliente (res.send, res.json, res.render...), sino se colgará la conexión. Si hubiese una respuesta en un middleware que contiene next() no se tendrán en cuenta las siguientes respuestas que continúen la cadena. 
+
+Los route handlers necesitan que se les pase el path como primer parámetro (si es para cualquiera se indica con **/\***), mientras que con el middleware es opcional (si es omitido aceptará cualquier path). Los route handlers pueden ser considerados como middleware que maneja HTTP verbs (app.get, app.post...) mientras que el Middleware puede ser considerado como un route handler que maneja todos los HTTP verbs. 
+
+Como ejemplo:
+```
+var app = require('express')();
+
+app.use(function(req, res, next){
+        console.log('\n\nALLWAYS');
+        next();
+});
+
+app.get('/a', function(req, res){
+        console.log('/a: route terminated');
+        res.send('a');
+});
+app.get('/a', function(req, res){
+        console.log('/a: never called');
+});
+app.get('/b', function(req, res, next){
+        console.log('/b: route not terminated');
+        next();
+});
+app.use(function(req, res, next){
+        console.log('SOMETIMES');
+        next();
+});
+app.get('/b', function(req, res, next){
+        console.log('/b (part 2): error thrown' );
+        throw new Error('b failed');
+});
+app.use('/b', function(err, req, res, next){
+        console.log('/b error detected and passed on');
+        next(err);
+});
+app.get('/c', function(err, req){
+        console.log('/c: error thrown');
+        throw new Error('c failed');
+});
+app.use('/c', function(err, req, res, next){
+        console.log('/c: error deteccted but not passed on');
+        next();
+});
+
+app.use(function(err, req, res, next){
+        console.log('unhandled error detected: ' + err.message);
+        res.send('500 - server error');
+});
+
+app.use(function(req, res){
+        console.log('route not handled');
+        res.send('404 - not found');
+});
+
+app.listen(3000, function(){
+        console.log('listening on 3000');
+});
+```
+
+Para hacer uso de un middleware puede ser una función directamente exportada. El módulo (*lib/tourRequiresWaiver.js*):
+```
+module.exports = function(req,res,next){
+        var cart = req.session.cart;
+        if(!cart) return next();
+        if(cart.some(function(item){ return item.product.requiresWaiver; })){
+                if(!cart.warnings) cart.warnings = [];
+                cart.warnings.push('One or more of your selected tours' +
+                        'requires a waiver.');
+        }
+        next();
+}
+```
+
+Y hacemos uso de él (también puede ser que llamemos a los atributos que tenga un módulo, que es lo que haremos con muchos módulos externos):
+```
+app.use(require('./lib/requiresWaiver.js'));
+```
+
+##### Middleware común
+Por como estuvieron unidos en el tiempo siempre se recomienda instalarlo de serie (npm install --save connect) y tenerlo disponible (var connect = require(connect);). 
+
+Los middleware más comunes de utilizar son:
+
+* **basicAuth** (contenido dentro de connect): Autenticación muy básica. Solo para hacer proyectos rápidamente y que funcionen bajo HTTPS.
+* **body-parser**: Para parsear respuestas que nos vengan con información bien JSON o urlencoded (media type application/x-www-form-urlencoded).
+* **compress**: Para comprimir la respuesta en gzip. Hay que linkarlo lo más pronto posible, antes de cualquier middleware que pueda mandar una respuesta.
+* **cookie-parser**: Como vimos en el cap9 para soportar cookies.
+* **cookie-session**: Mantener sesiones mediante almacenamiento en cookie. Cap9.
+* **express-session**: ID de sesión mantenido en cookie, el resto en memoria, BBDD...
+* **csurf**: Protección contra ataques CSRF (cross-site request forgery). Utiliza sesiones.
+* **directory**: Listado de directorios para ficheros estáticos.
+* **errorHandler**: Mensajes de error para el cliente. No usar en Producción ya que compromete la información del servidor. En Cap20.
+* **static-favicon**: Para mejorar el servir el icono que aparece en la barra de título del navegador.
+* **morgan**: Para logs de peticiones. En Cap20.
+* **method-override**: Soporte para la cabecera de peticiones x-http-method-override.
+* **query**: Parsea la querystring y la deja como la propiedad query en el objeto request. Viene linkado por defecto en Express.
+* **response-time**: Añade la cabecera X-Response-Time a la respuesta, indicando el tiempo de respuesta en ms. Útil para tuning.
+* **static**: Para servir estáticos (public). Se puede linkar varias veces para distintos directorios.
+* **vhost**: Virtual Hosts. Para hacer más fácil la gestión de subdominios en Express.
+
+**No hay una tienda expecífica para buscar middleware**. La mayor parte se puede encontrar en npm buscando por "Express", "Connect" y "Middleware".
 
 
-### CAP 11 -
+
+### CAP 11 - Sending Email
+
+Una forma de comunicarse desde tu sitio web con el mundo es el email. Password de acceso, emails promocionales. No viene por defecto ningún módulo pero recomienda instalar **nodemailer**.
+
+Un email contiene cabecera y cuerpo. Al enviarlo debe tener la cabecera **from** informada. Hay que indicar que la dirección que aparece no responderá los correos (si es que nadie va a estar leyendo el correo que pueda entrar, como por ejemplo se indica con do-not-reply@...). El **formato** puede ser texto plano o HTML, y nosotros a través de nodemailer enviaremos los dos juntos. El HTML que permiten los correos está muy limitado, es cercano a lo que había en 1996.
+
+[Artículo](https://kb.mailchimp.com/es/campaigns/ways-to-build/about-html-email) sobre escribir emails HTML. Para ahorrar tiempo muy recomendable [HTML Boilerplate](https://github.com/seanpowell/Email-Boilerplate). 
+
+Para instalar el módulo (npm install --save nodemailer). Lo cargamos:
+```
+var nodemailer = require('nodemailer');
+
+var mailTransport = nodemailer.createTransport('SMTP',{
+        service: 'Gmail',
+        auth: {
+                user: credentials.gmail.user,
+                pass: credentials.gmail.password,
+        }
+});
+```
+
+Y luego completamos el fichero de credenciales (*credentials.js*) con la nueva parte:
+```
+module.exports = {
+        cookieSecret: 'your cookie secret goes here',
+        gmail: {
+                user: 'your gmail username',
+                password: 'your gmail password',
+        }
+};
+```
+
+Para **mandar un email** a varios destinatarios (por ejemplo GMAIL limita a 100 destinatarios por correo, y tiene un límite de 500 correos por día, por lo que lo hacemos que nunca envíe un correo a más de 100 personas):
+```
+// largeRecipientList is an array of email addresses
+var recipientLimit = 100;
+for(var i=0; i<largeRecipientList.length/recipientLimit; i++){
+        mailTransport.sendMail({
+                from: '"Meadowlark Travel" <info@meadowlarktravel.com>',
+                to: largeRecipientList
+                        .slice(i*recipientLimit, i*(recipientLimit+1)).join(','),
+                subject: 'Special price on Hood River travel package!',
+                text: 'Book your trip to scenic Hood River now!',
+        }, function(err){
+                if(err) console.error( 'Unable to send email: ' + error );
+        });
+}
+```
+
+Para mandar **mails promocionales o newsletters** lo mejor es utilizar servicios como **Mailchimp** o **Campaign monitor**.
+
+Nodemailer nos traducirá automáticamente a texto plano: 
+```
+mailTransport.sendMail({
+        from: '"Meadowlark Travel" <info@meadowlarktravel.com>',
+        to: 'joecustomer@gmail.com, "Jane Customer" ' +
+                '<janecustomer@gyahoo.com>, frecsutomer@hotmail.com',
+        subject: 'Your Meadowlark Travel Tour',
+        html: '<h1>Meadowlark Travel</h1>\n<p>Thanks for book your trip with ' +
+                'Meadowlark Travel.  <b>We look forward to your visit!</b>',
+        generateTextFromHtml: true,
+}, function(err){
+        if(err) console.error( 'Unable to send email: ' + error );
+});
+```
+
+Para incluir imágenes en tus emails la mejor práctica es sólo incluir links que apunten a imágenes contenidas en tu servidor web. Para ello crearemos un directorio *email* en nuestra instalación y así meter ahí todos los ficheros que necesitemos. En el Cap16 nos enseñará como apuntar a esos directorios sin tener que utilizar el localhost (no tiene sentido al no recibir el email en el PC en el que estás desarrollando la aplicación). 
+
+Para no tener que poner código HTML en nuestro javascript vamos a crear vistas para nuestros correos y sobre ellos poner información concerniente al cliente que lo va a recibir (a partir de HTML Boilerplate creamos *views/email/cart-thank-you.handlebars*):
+```
+<body>
+<table cellpadding="0" cellspacing="0" border="0" id="backgroundTable">
+    <tr>
+        <td valign="top">
+            <table cellpadding="0" cellspacing="0" border="0" align="center">
+                <tr>
+                    <td width="200" valign="top"><img class="image_fix"
+                        src="http://meadowlarktravel.com/email/logo.png"
+                        alt="Meadowlark Travel" title="Meadowlark Travel"
+                        width="180" height="220" /></td>
+                </tr>
+                <tr>
+                    <td width="200" valign="top"><p>
+                        Thank you for booking your trip with Meadowlark Travel,
+                        {{cart.billing.name}}.</p><p>Your reservation number
+                        is {{cart.number}}.</p></td>
+                </tr>
+                <tr>
+                    <td width="200" valign="top">Problems with your reservation?
+                    Contact Meadowlark Travel at
+                    <span class="mobile_link">555-555-0123</span>.</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+```
+
+Como no tendremos acceso a nuestro servidor al estar en pruebas lo mejor es utilizar servicios como el de [placehold](http://placehold.it/100x100) para hacer las pruebas con imágenes del tamaño que necesitamos. 
+
 
 
 ### CAP 12 -
