@@ -1379,9 +1379,100 @@ Para no tener que poner código HTML en nuestro javascript vamos a crear vistas 
 
 Como no tendremos acceso a nuestro servidor al estar en pruebas lo mejor es utilizar servicios como el de [placehold](http://placehold.it/100x100) para hacer las pruebas con imágenes del tamaño que necesitamos. 
 
+Creamos la ruta en la aplicación, que tendrá dos render. El primero se ejecutará la primera vez para mandar el mail y el segundo ya el resto de veces para mostrar la página.
+```
+app.post('/cart/checkout', function(req, res){
+        var cart = req.session.cart;
+        if(!cart) next(new Error('Cart does not exist.'));
+        var name = req.body.name || '', email = req.body.email || '';
+        // input validation
+        if(!email.match(VALID_EMAIL_REGEX))
+                return res.next(new Error('Invalid email address.'));
+        // assign a random cart ID; normally we would use a database ID here
+        cart.number = Math.random().toString().replace(/^0\.0*/, '');
+        cart.billing = {
+                name: name,
+                email: email,
+        };
+    res.render('email/cart-thank-you',
+        { layout: null, cart: cart }, function(err,html){
+                if( err ) console.log('error in email template');
+                mailTransport.sendMail({
+                    from: '"Meadowlark Travel": info@meadowlarktravel.com',
+                    to: cart.billing.email,
+                    subject: 'Thank You for Book your Trip with Meadowlark',
+                    html: html,
+                    generateTextFromHtml: true
+                }, function(err){
+                        if(err) console.error('Unable to send confirmation: '
+                                + err.stack);
+                });
+            }
+    );
+    res.render('cart-thank-you', { cart: cart });
+});
+```
+
+Podemos encapsular toda la lógica de envío de correo en un módulo(*lib/email.js*):
+```
+var nodemailer = require('nodemailer');
+
+module.exports = function(credentials){
+
+        var mailTransport = nodemailer.createTransport('SMTP',{
+                service: 'Gmail',
+                auth: {
+                        user: credentials.gmail.user,
+                        pass: credentials.gmail.password,
+                }
+        });
+
+        var from = '"Meadowlark Travel" <info@meadowlarktravel.com>';
+        var errorRecipient = 'youremail@gmail.com';
+
+        return {
+                send: function(to, subj, body){
+                    mailTransport.sendMail({
+                        from: from,
+                        to: to,
+                        subject: subj,
+                        html: body,
+                        generateTextFromHtml: true
+                    }, function(err){
+                        if(err) console.error('Unable to send email: ' + err);
+                    });
+                }),
+
+                emailError: function(message, filename, exception){
+                        var body = '<h1>Meadowlark Travel Site Error</h1>' +
+                                'message:<br><pre>' + message + '</pre><br>';
+                        if(exception) body += 'exception:<br><pre>' + exception
+                                + '</pre><br>';
+                        if(filename) body += 'filename:<br><pre>' + filename
+                                + '</pre><br>';
+                    mailTransport.sendMail({
+                        from: from,
+                        to: errorRecipient,
+                        subject: 'Meadowlark Travel Site Error',
+                        html: body,
+                        generateTextFromHtml: true
+                    }, function(err){
+                        if(err) console.error('Unable to send email: ' + err);
+                    });
+                },
+}
+```
+
+Y ya lo llamaremos simplemente de la siguiente manera:
+```
+var emailService = require('./lib/email.js')(credentials);
+
+emailService.send('joecustomer@gmail.com', 'Hood River tours on sale today!',
+        'Get \'em while they\'re hot!');
+```
 
 
-### CAP 12 -
+### CAP 12 - Production Concerns
 
 
 ### DUDAS: 
