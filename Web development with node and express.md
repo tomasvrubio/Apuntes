@@ -1474,6 +1474,153 @@ emailService.send('joecustomer@gmail.com', 'Hood River tours on sale today!',
 
 ### CAP 12 - Production Concerns
 
+Aunque puede ser pronto para hablar de Producción cuanto antes se traten ciertos temas más trabajo se puede ahorrar a futuro. 
+
+Express soporta **distintos entornos de trabajo** (Producción, Desarrollo, Test...). Lo mejor es indicar dicho entorno con la variable global **NODE_ENV**:
+``` 
+http.createServer(app).listen(app.get('port'), function(){
+    console.log( 'Express started in ' + app.get('env') +
+        ' mode on http://localhost:' + app.get('port') +
+        '; press Ctrl-C to terminate.' );
+});
+``` 
+
+Cambiaremos el entorno desde el sistema exportando el valor que se necesite (si pones producción habrá Warnings indicándote de cosas que no son recomendables para Producción como puede ser el almacenar las sesiones en Memoria en vez de en BBDD):
+```
+export NODE_ENV=production
+```
+
+Por ejemplo podemos **escribir en logs de distinta manera para cada entorno**. Vamos a poner en Desarrollo log en colores y en Producción logs que roten cada 24 horas:
+```
+switch(app.get('env')){
+    case 'development':
+        // compact, colorful dev logging
+        app.use(require('morgan')('dev'));
+        break;
+    case 'production':
+        // module 'express-logger' supports daily log rotation
+        app.use(require('express-logger')({
+            path: __dirname + '/log/requests.log'
+        }));
+        break;
+}
+```
+
+##### Escalar la aplicación
+Hay distintas maneras de escalar: scaling up (hacer el servidor más potente) y scaling out (aumentar el número de servidores). La mejor opción suele ser **scaling out**. Para poder utilizar esa opción tiene que haber almacenamiento compartido entre instancias (BBDD, filesystem compartido...).
+
+Para hacer que se ejecute en varias CPUs necesitamos un master y los worker posibles hasta gastar las CPUs que tenga la máquina. Primero le hacemos una pequeña modificación a *meadowlark.js*:
+```
+function startServer() {
+    http.createServer(app).listen(app.get('port'), function(){
+      console.log( 'Express started in ' + app.get('env') +
+        ' mode on http://localhost:' + app.get('port') +
+        '; press Ctrl-C to terminate.' );
+    });
+}
+
+if(require.main === module){
+    // application run directly; start app server
+    startServer();
+} else {
+    // application imported as a module via "require": export function
+    // to create server
+    module.exports = startServer;
+}
+```
+
+Si ha sido llamado directamente entrará en **require.main === module**. En caso de haber sido llamado utilizando require entrará en la otra parte. Ahora creamos el script *meadowlark_cluster.js*, que se encargará de levantar los worker necesarios y volver a levantar aquellos que se caigan:
+```
+var cluster = require('cluster');
+
+function startWorker() {
+    var worker = cluster.fork();
+    console.log('CLUSTER: Worker %d started', worker.id);
+}
+
+if(cluster.isMaster){
+
+    require('os').cpus().forEach(function(){
+            startWorker();
+    });
+
+    // log any workers that disconnect; if a worker disconnects, it
+    // should then exit, so we'll wait for the exit event to spawn
+    // a new worker to replace it
+    cluster.on('disconnect', function(worker){
+        console.log('CLUSTER: Worker %d disconnected from the cluster.',
+            worker.id);
+    });
+
+    // when a worker dies (exits), create a worker to replace it
+    cluster.on('exit', function(worker, code, signal){
+        console.log('CLUSTER: Worker %d died with exit code %d (%s)',
+            worker.id, code, signal);
+        startWorker();
+    });
+
+} else {
+
+    // start our app on worker; see meadowlark.js
+    require('./meadowlark.js')();
+
+}
+```
+
+Si quieres ver como está trabajando cada worker puedes poner lo siguiente antes de recibir peticiones:
+```
+app.use(function(req,res,next){
+    var cluster = require('cluster');
+    if(cluster.isWorker) console.log('Worker %d received request',
+        cluster.worker.id);
+});
+```
+
+##### Manejo de excepciones
+Es bueno siempre tener una página de errores propia (*views/500.handlebars*) para dar una imagen más profesional hacia los usuarios, además de que se puede hacer cierta monitorización de cuando eso ocurre para que se entere el equipo de desarrollo. Por ejemplo:
+```
+app.get('/fail', function(req, res){
+    throw new Error('Nope!');
+});
+
+app.use(function(err, req, res, next){
+    console.error(err.stack);
+    app.status(500).render('500');
+});
+```
+
+Si nos encontramos con una excepción en una llamada asíncrona lo que ocurrirá es que el servidor se caerá, como por ejemplo en el siguiente código:
+```
+app.get('/epic-fail', function(req, res){
+    process.nextTick(function(){
+        throw new Error('Kaboom!');
+    });
+});
+```
+
+Para manejar ese tipo de situaciones lo mejor es tener un cluster en el que el master revise si los hijos están bien (como lo puesto más arriba) y que se encargue de levantar un nuevo worker en caso de que se haya caído alguno.
+
+
+
+
+
+
+
+### CAP 13 - 
+
+
+
+### CAP 14 - 
+
+
+
+### CAP 15 - 
+
+
+
+### CAP 16 - 
+
+
 
 ### DUDAS: 
 
