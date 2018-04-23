@@ -1598,19 +1598,422 @@ app.get('/epic-fail', function(req, res){
 });
 ```
 
-Para manejar ese tipo de situaciones lo mejor es tener un cluster en el que el master revise si los hijos están bien (como lo puesto más arriba) y que se encargue de levantar un nuevo worker en caso de que se haya caído alguno.
+Para manejar ese tipo de situaciones lo mejor es tener un cluster en el que el master revise si los hijos están bien (como lo puesto más arriba) y que se encargue de levantar un nuevo worker en caso de que se haya caído alguno. Con tener el master y un sólo hijo ya es suficiente para poder mantener ese tipo de arquitectura, aunque el tiempo en volver a dar servicio con las mismas condiciones será mayor. 
+
+##### Apagar ante excepciones no controladas
+Lo haremos utilizando **dominios**. Se trata de un contexto de ejecución que capturará los errores que ocurran en su interior. Permiten ser más flexibles en el manejo de errores por lo que son útiles en zonas de código propensas a generar errores. Un buena praxis sería procesar cada petición en un dominio y así pudiendo coger cualquier excepción que nos sea devuelta. Lo podemos conseguir añadiendo un middleware antes de las rutas o de otro middleware (si vamos a tener peticiones que se vayan mucho de tiempo podemos aumentar el tiempo a más de 5 segundos):
+```
+app.use(function(req, res, next){
+    // create a domain for this request
+    var domain = require('domain').create();
+    // handle errors on this domain
+    domain.on('error', function(err){
+        console.error('DOMAIN ERROR CAUGHT\n', err.stack);
+        try {
+            // failsafe shutdown in 5 seconds
+            setTimeout(function(){
+                console.error('Failsafe shutdown.');
+                process.exit(1);
+            }, 5000);
+
+            // disconnect from the cluster
+            var worker = require('cluster').worker;
+            if(worker) worker.disconnect();
+
+            // stop taking new requests
+            server.close();
+
+            try {
+                // attempt to use Express error route
+                next(err);
+            } catch(err){
+                // if Express error route failed, try
+                // plain Node response
+                console.error('Express error mechanism failed.\n', err.stack);
+                res.statusCode = 500;
+                res.setHeader('content-type', 'text/plain');
+                res.end('Server error.');
+            }
+        } catch(err){
+            console.error('Unable to send 500 response.\n', err.stack);
+        }
+    });
+
+    // add the request and response objects to the domain
+    domain.add(req);
+    domain.add(res);
+
+    // execute the rest of the request chain in the domain
+    domain.run(next);
+});
+
+// other middleware and routes go here
+
+var server = http.createServer(app).listen(app.get('port'), function(){
+    console.log('Listening on port %d.', app.get('port'));
+});
+```
+
+El [siguiente artículo](http://bit.ly/100_percent_uptime) da ideas de como conseguir mantener un servidor node levantado al 100%.
+
+
+##### Escalar a través de varios servidores
+Para poder servir peticiones a distintos servidores tendremos que usar un proxy inverso que reparta las conexiones. Para ello es recomendable utilizar **nginx**. Para poder utilizar un proxy hay que indicarselo a Express:
+``` 
+app.enable('trust proxy');
+```
+
+
+##### Monitorizar la aplicación
+Evita situaciones de indisponibilidad. Una de las acciones que se pueden realizar es lanzar peticiones automáticas desde un agente externo para comprobar que sigue respondiendo, y para ello podemos utilizar **UptimeRobot**. Desde una funcionalidad que falle se pueden mandar mails para indicar que no está funcionando adecuadamente (esto se vio en el tema anterior). También podemos realizar pruebas de estrés sobre la aplicación que podemos hacer con el módulo node **loadtest**.
 
 
 
+### CAP 13 - Persistence
+
+Todas las aplicaciones por sencillas que sean necesitan guardar algo de información de manera persistente. En el libro van a presentar varias opciones pero centrándose en las BBDD de documentos. 
+
+##### Filesystem persistence
+A través de ficheros planos almacenados en el filesystem. Se hace a través del módulo **fs**. No escala bien con el crecimiento de servidores a menos que tengas un almacenamiento compartido en red. Además al no tener estructura interna se hace difícil la búsqueda de datos en su interior. Por ello es preferible el uso de BBDD aunque este tipo de almacenamiento es muy útil para almacenar archivos binarios (imágenes, ficheros, vídeos...).
+Hay que tener especial cuidado con lo que suben los usuarios al servidor ya que podrían meter ficheros corruptos o bien nombres del fichero que comprometan el código. En el libro viene un ejemplo para subir una foto al servidor.
+
+
+##### Cloud persistence
+Subir un fichero a un servicio como puede ser AWS o Azure.
+
+
+##### Database persistence
+Están las BBDD **relacionales** y las **NoSQL**. Aunque puede ser fácil conectar una BBDD relacional a node, las NoSQL son extremadamente sencillas.
+
+Las **más famosas** son las BBDD basadas en **documentos** y las de **clave-valor**.
+
+Las BBDD de documentos ofrecen un buen compromiso entre las constraints de las BBDD relacionales y la simplicidad de las BBDD de clave-valor. Nos centramos en **mongoDB** que es el líder en ese tipo.
+
+Para profundizar en mongoDB y su tunning recomienda el libro MongoDB: The Definitive Guide (O’Reilly).
+
+Hay servicios Online para alojar BBDD mongo. Tienen servicios gratuitos que están bien para hacer pruebas. Por ejemplo están **mongoLab** y **mongoHG**.
+
+Para conectarnos desde node lo haremos utilizando un *ODM-Object Document Mapper* como es **mongoose**. Introduce schemas y models, que combinados hacen una función similar a las clases de los POO. Son flexibles pero dan una estructura necesaria para trabajar con la BBDD.
+
+Instalamos:
+```
+npm install --save mongoose
+```
+
+E indicamos la conexión a nuestros entornos:
+```
+mongo: {
+    development: {
+        connectionString: 'your_dev_connection_string',
+    },
+    production: {
+        connectionString: 'your_production_connection_string',
+    },
+},
+```
+
+Para luego conectarnos (keepalive nos sirve para prevenir errores de conexión):
+```
+var mongoose = require('mongoose');
+var opts = {
+    server: {
+       socketOptions: { keepAlive: 1 }
+    }
+};
+switch(app.get('env')){
+    case 'development':
+        mongoose.connect(credentials.mongo.development.connectionString, opts);
+        break;
+    case 'production':
+        mongoose.connect(credentials.mongo.production.connectionString, opts);
+        break;
+    default:
+        throw new Error('Unknown execution environment: ' + app.get('env'));
+}
+```
+
+Para crear los schemas/models lo hacemos generando por ejemploel fichero *models/vacation.js*. Contiene propiedades y cada una tiene su tipo (strings, númericos, array de strings, booleanos). También contiene métodos.
+```
+var mongoose = require('mongoose');
+
+var vacationSchema = mongoose.Schema({
+    name: String,
+    slug: String,
+    category: String,
+    sku: String,
+    description: String,
+    priceInCents: Number,
+    tags: [String],
+    inSeason: Boolean,
+    available: Boolean,
+    requiresWaiver: Boolean,
+    maximumGuests: Number,
+    notes: String,
+    packagesSold: Number,
+});
+vacationSchema.methods.getDisplayPrice = function(){
+    return '$' + (this.priceInCents / 100).toFixed(2);
+};
+var Vacation = mongoose.model('Vacation', vacationSchema);
+module.exports = Vacation;
+```
+
+Para usar el modelo en la aplicación tendríamos que importarlo:
+```
+var Vacation = require('./models/vacation.js');
+```
+
+Para **llenar la BBDD** hacemos primero un find para detectar si ya existen registros. En caso de que los haya suponemos que ya hemos cargado estos registros y que no hace falta que lo volvamos a hacer. En caso de que no haya ningún registro cargamos estas 3 vacaciones:
+```
+Vacation.find(function(err, vacations){
+    if(vacations.length) return;
+
+    new Vacation({
+        name: 'Hood River Day Trip',
+        slug: 'hood-river-day-trip',
+        category: 'Day Trip',
+        sku: 'HR199',
+        description: 'Spend a day sailing on the Columbia and ' +
+            'enjoying craft beers in Hood River!',
+        priceInCents: 9995,
+        tags: ['day trip', 'hood river', 'sailing', 'windsurfing', 'breweries'],
+        inSeason: true,
+        maximumGuests: 16,
+        available: true,
+        packagesSold: 0,
+    }).save();
+
+    new Vacation({
+        name: 'Oregon Coast Getaway',
+        slug: 'oregon-coast-getaway',
+        category: 'Weekend Getaway',
+        sku: 'OC39',
+        description: 'Enjoy the ocean air and quaint coastal towns!',
+        priceInCents: 269995,
+        tags: ['weekend getaway', 'oregon coast', 'beachcombing'],
+        inSeason: false,
+        maximumGuests: 8,
+        available: true,
+        packagesSold: 0,
+    }).save();
+
+    new Vacation({
+        name: 'Rock Climbing in Bend',
+        slug: 'rock-climbing-in-bend',
+        category: 'Adventure',
+        sku: 'B99',
+        description: 'Experience the thrill of climbing in the high desert.',
+        priceInCents: 289995,
+        tags: ['weekend getaway', 'bend', 'high desert', 'rock climbing'],
+        inSeason: true,
+        requiresWaiver: true,
+        maximumGuests: 4,
+        available: false,
+        packagesSold: 0,
+        notes: 'The tour guide is currently recovering from a skiing accident.',
+    }).save();
+});
+```
+
+Para **consultar información** y mostrarla por pantalla hacemos la siguiente vista (*views/vacations.handlebars*):
+```
+<h1>Vacations</h1>
+{{#each vacations}}
+    <div class="vacation">
+        <h3>{{name}}</h3>
+        <p>{{description}}</p>
+        {{#if inSeason}}
+            <span class="price">{{price}}</span>
+            <a href="/cart/add?sku={{sku}}" class="btn btn-default">Buy Now!</a>
+        {{else}}
+            <span class="outOfSeason">We're sorry, this vacation is currently
+            not in season.
+            {{! The "notify me when this vacation is in season"
+                page will be our next task. }}
+            <a href="/notify-me-when-in-season?sku={{sku}}">Notify me when
+            this vacation is in season.</a>
+        {{/if}}
+    </div>
+{{/each}}
+```
+
+Y la completamos con la siguiente ruta que le manda los registros de la BBDD:
+```
+// see companion repository for /cart/add route....
+
+app.get('/vacations', function(req, res){
+    Vacation.find({ available: true }, function(err, vacations){
+        var context = {
+            vacations: vacations.map(function(vacation){
+                return {
+                    sku: vacation.sku,
+                    name: vacation.name,
+                    description: vacation.description,
+                    price: vacation.getDisplayPrice(),
+                    inSeason: vacation.inSeason,
+                }
+            })
+        };
+        res.render('vacations', context);
+    });
+});
+```
+
+Realizamos la búsqueda y con el objeto resultante mapeamos la información que necesitamos a un string. 
+
+Para **añadir información a la BBDD** primero creamos un nuevo esquema (*models/vacationInSeasonListener.js*):
+```
+var mongoose = require('mongoose');
+
+var vacationInSeasonListenerSchema = mongoose.Schema({
+    email: String,
+    skus: [String],
+});
+var VacationInSeasonListener = mongoose.model('VacationInSeasonListener',
+    vacationInSeasonListenerSchema);
+
+module.exports = VacationInSeasonListener;
+```
+
+Una vista que lo vaya a utilizar (*views/notify-me-when-in-season.handlebars*):
+```
+<div class="formContainer">
+    <form class="form-horizontal newsletterForm" role="form"
+            action="/notify-me-when-in-season" method="POST">
+        <input type="hidden" name="sku" value="{{sku}}">
+        <div class="form-group">
+            <label for="fieldEmail" class="col-sm-2 control-label">Email</label>
+            <div class="col-sm-4">
+                <input type="email" class="form-control" required
+                    id="fieldName" name="email">
+            </div>
+        </div>
+        <div class="form-group">
+            <div class="col-sm-offset-2 col-sm-4">
+                <button type="submit" class="btn btn-default">Submit</button>
+            </div>
+        </div>
+    </form>
+</div>
+```
+
+Y por último la ruta que lo maneje:
+```
+var VacationInSeasonListener = require('./models/vacationInSeasonListener.js');
+
+app.get('/notify-me-when-in-season', function(req, res){
+    res.render('notify-me-when-in-season', { sku: req.query.sku });
+});
+
+app.post('/notify-me-when-in-season', function(req, res){
+    VacationInSeasonListener.update(
+        { email: req.body.email },
+        { $push: { skus: req.body.sku } },
+        { upsert: true },
+        function(err){
+            if(err) {
+                console.error(err.stack);
+                req.session.flash = {
+                    type: 'danger',
+                    intro: 'Ooops!',
+                    message: 'There was an error processing your request.',
+                };
+                return res.redirect(303, '/vacations');
+            }
+            req.session.flash = {
+                type: 'success',
+                intro: 'Thank you!',
+                message: 'You will be notified when this vacation is in season.',
+            };
+            return res.redirect(303, '/vacations');
+        }
+    );
+});
+```
+
+Con este código estaremos creando un nuevo documento si es que no existía ninguno antes y si no estaremos rellenando uno ya existente. Para eso usamos **upsert** que es una combinación de update e insert. Con $push insertamos los valores en los campos deseados. 
+
+
+##### Utilizar mongodb para almacenar la sesión
+MongoDB no es la mejor opción para almacenar sesiones, simplemente porque se puede hacer mucho más, y por ello si simplemente se va a hacer eso es mejor utilizar **redis**. Es muy sencillo montar las sesiones de esta manera. Instalamos el paquete **session-mongoose** (npm install --save session-mongoose). Lo linkamos en el fichero de aplicación principal:
+```
+var MongoSessionStore = require('session-mongoose')(require('connect'));
+var sessionStore = new MongoSessionStore({ url:
+    credentials.mongo.connectionString });
+
+app.use(require('cookie-parser')(credentials.cookieSecret));
+app.use(require('express-session')({ store: sessionStore }));
+```
+
+Estas sesiones sólo se mantendrán mientras el usuario no borre las cookies. Por ejemplo podemos utilizarlo para que recuerde que moneda prefiere el usuario. Al final de nuestra página de vacaciones:
+```
+<hr>
+<p>Currency:
+    <a href="/set-currency/USD" class="currency {{currencyUSD}}">USD</a> |
+    <a href="/set-currency/GBP" class="currency {{currencyGBP}}">GBP</a> |
+    <a href="/set-currency/BTC" class="currency {{currencyBTC}}">BTC</a>
+</p>
+```
+
+Un poco de css:
+```
+a.currency {
+    text-decoration: none;
+}
+.currency.selected {
+    font-weight: bold;
+    font-size: 150%;
+}
+```
+
+Y el manejo de rutas:
+```
+app.get('/set-currency/:currency', function(req,res){
+    req.session.currency = req.params.currency;
+    return res.redirect(303, '/vacations');
+});
+
+function convertFromUSD(value, currency){
+    switch(currency){
+        case 'USD': return value * 1;
+        case 'GBP': return value * 0.6;
+        case 'BTC': return value * 0.0023707918444761;
+        default: return NaN;
+    }
+}
+
+app.get('/vacations', function(req, res){
+    Vacation.find({ available: true }, function(err, vacations){
+        var currency = req.session.currency || 'USD';
+        var context = {
+            currency: currency,
+            vacations: vacations.map(function(vacation){
+                return {
+                    sku: vacation.sku,
+                    name: vacation.name,
+                    description: vacation.description,
+                    inSeason: vacation.inSeason,
+                    price: convertFromUSD(vacation.priceInCents/100, currency),
+                    qty: vacation.qty,
+                }
+            })
+        };
+        switch(currency){
+            case 'USD': context.currencyUSD = 'selected'; break;
+            case 'GBP': context.currencyGBP = 'selected'; break;
+            case 'BTC': context.currencyBTC = 'selected'; break;
+        }
+        res.render('vacations', context);
+    });
+});
+```
 
 
 
-
-### CAP 13 - 
-
+### CAP 14 - Routing
 
 
-### CAP 14 - 
+
 
 
 
