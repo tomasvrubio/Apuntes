@@ -2012,6 +2012,41 @@ app.get('/vacations', function(req, res){
 
 ### CAP 14 - Routing
 
+**Routing** es el mecanismo por el cual las peticiones son encaminadas al código que las maneja a través de lo que especifique su URL y método. 
+
+**IA**: Information Architecture. Se trata del orden conceptual de tus contenidos. Es recomendable darle una vuelta antes de ponerse a tirar código. [Ensayo de 1998](http://www.w3.org/Provider/Style/URI.html) sobre el tema por uno de los *creadores* de Internet. Uno de los puntos que viene a decir es que nuestras URLs no pueden cambiar a lo largo del tiempo porque si no las referencias que puedan haberse hecho se pierden. Intenta categorizar las cosas de manera lógica. 
+
+Recomendaciones para conseguir una IA duradera:
+
+* **Nunca expongas detalles técnicos en tu URL**: Puede mostrar algo que actualmente esté pasado de moda.
+* **Evita información insignificante en tus URL**: Que cada palabra que pongas tenga sentido. ¿Para que queremos /home si ya tenemos el root donde debería colgar tu página principal?
+* **Evita URLs demasiado largas**: Pero no a cualquier precio. Debe ser legible.
+* **Consistente con los separadores de palabra**: Mejor "-" que "_".
+* **Nunca usar blancos ni caracteres no imprimibles**
+* **Usar minúsculas**
+
+
+##### SEO
+Si quieres que tu sitio sea encontrado debes preocuparte del SEO y de como tus URL le afectan. Hay que tratar de que la URL que indiques tenga información de lo que va a mostrar pero no podemos volvernos locos y poner todo tipo de información sólo para que nuestro sitio esté mejor posicionado.
+
+##### Subdominios
+Otra manera de enrutar peticiones. Están reservados para partes significativamente diferentes de la aplicación (REST API - api.dominio.com, Administración - admin.dominio.com). Este tipo de contenido quedará fuera del SEO por lo que es importante discernir si nos importa que esté bien posicionado o si da igual (como los ejemplos que se han puesto). 
+
+Para poder manejar los subdominios necesitamos del paquete **vhost** (npm install --save vhost) que permite enrutar para unos casos y otros, tal y como hacemos con app:
+```
+// create "admin" subdomain...this should appear
+// before all your other routes
+var admin = express.Router();
+app.use(vhost('admin.*', admin));
+
+// create admin routes; these can be defined anywhere
+admin.get('/', function(req, res){
+        res.render('admin/home');
+});
+admin.get('/users', function(req, res){
+        res.render('admin/users');
+});
+``` 
 
 
 
