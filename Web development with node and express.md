@@ -2048,11 +2048,163 @@ admin.get('/users', function(req, res){
 });
 ``` 
 
+Podemos ir complicando el enrutado. Dividir el tráfico entre dos app.get:
+``` 
+app.get('/foo', function(req,res,next){
+        if(Math.random() < 0.5) return next();
+        res.send('sometimes this');
+});
+app.get('/foo', function(req,res){
+        res.send('and sometimes that');
+});
+```
+
+Mostrar ofertas especiales (distintas en cada caso) en función de lo recuperado de la BBDD utilizando la propiedad **res.locals**:
+```
+function specials(req, res, next){
+        res.locals.specials = getSpecialsFromDatabase();
+        next();
+}
+
+app.get('/page-with-specials', specials, function(req,res){
+        res.render('page-with-specials');
+});
+```
+
+Y se puede implementar un **mecanismo de autorización** a través de lo siguiente:
+```
+function authorize(req, res, next){
+        if(req.session.authorized) return next();
+        res.render('not-authorized');
+}
+
+app.get('/secret', authorize, function(){
+        res.render('secret');
+})
+
+app.get('/sub-rosa', authorize, function(){
+        res.render('sub-rosa');
+});
+```
+
+A través de **expresiones regulares** podemos hacer que varias rutas entren dentro de un mismo app.get. Los caracteres son +, ?, \*, ( y ). Para hacer que un ruta responda a *user* y *username*:
+```
+app.get('/user(name)?', function(req,res){
+        res.render('user');
+});
+```
+
+O un sitio que permite que pongas tantas "a" como quieras:
+```
+app.get('/khaa+n', function(req,res){
+        res.render('khaaan');
+});
+```
+
+**Parámetros de enrutado**: A través de variables indicadas en la url podemos modificar lo que se muestre a continuación. Esto lo vamos a utilizar mucho, especialmente para crear REST APIs. Como ejemplo:
+```
+var staff = {
+        portland: {
+                mitch: { bio: 'Mitch is the man to have at your back.' },
+                madeline: { bio: 'Madeline is our Oregon expert.' },
+        },
+        bend: {
+                walt: { bio: 'Walt is our Oregon Coast expert.' },
+        },
+};
+
+app.get('/staff/:city/:name', function(req, res){
+        var info = staff[req.params.city][req.params.name];
+        if(!info) return next();        // will eventually fall through to 404
+        res.render('staffer', info);
+});
+```
+
+
+##### Organizando las rutas
+No es factible definir todas nuestras rutas en el archivo principal de la aplicación. Un sitio sencillo puede tener unas cuantas rutas pero uno complejo podría tener cientos de rutas. 
+
+Principios para saber como organizar las rutas:
+
+* **Utilizar funciones con nombre para manejar las rutas**
+* **Las rutas no deben ser un misterio**: Para un sitio grande con muchas rutas, lo recomendable es dividirlas por funcionalidad pero tienes que tener claro donde pertenecen y poder localizarlas rápido.
+* **La organización de rutas debe ser extensible**: El método que elijas tiene que tener contemplado crecer.
+* **Utiliza las vistas automáticas para manejar rutas**: Muy útil si el sitio contiene muchas páginas estáticas con URLs fijas.
+
+**Declarar rutas en un módulo**
+El primer paso para ordenar las rutas es meterlas en un módulo. Podemos hacerlo de dos maneras.
+
+* **Opción 1:** Hacer del módulo una función que devuelva un array de objetos que contenga las propiedades "method" y "handler". Este método por ejemplo está bien para almacenar nuestras rutas dinámicamente, como puede ser una BBDD o un JSON. 
+
+```
+var routes = require('./routes.js')();
+
+routes.forEach(function(route){
+        app[route.method](route.handler);
+})
+```
+
+* **Opción 2:** Más sencilla. Que el módulo sea el que añade las rutas:
+
+```
+module.exports = function(app){
+
+        app.get('/', function(req,res){
+                app.render('home');
+        }))
+
+        //...
+
+};
+```
+
+Y sólo nos quedará llamarlo desde el archivo principal de nuestra aplicación:
+```
+require('./routes.js')(app);
+```
+
+Para esta segunda opción, que es la que elegiremos en el libro, separaremos las funciones con nombre a las que llamaremos en las rutas en distintos ficheros en función de su funcionalidad. Crearemos un directorio *handlers* y dentro tendremos distintos ficheros (*main.js* para el home, el about y alguna otra que consideremos, y ya después iremos creando en base a las funcionalidades que vayamos incorporando). Por ejemplo *main.js*:
+```
+var fortune = require('../lib/fortune.js');
+
+exports.home = function(req, res){
+        res.render('home');
+};
+
+exports.about = function(req, res){
+        res.render('about', {
+                fortune: fortune.getFortune(),
+                pageTestScript: '/qa/tests-about.js'
+        } );
+};
+```
+
+Y modificamos *routes.js* para hacer uso de ello:
+```
+var main = require('./handlers/main.js');
+
+module.exports = function(app){
+
+        app.get('/', main.home);
+        app.get('/about', main.about);
+        //...
+
+};
+```
+
+Y así iremos haciendo para ir cargando las rutas de las distintas funcionalidades de la aplicación. 
+
+```
+
+```
+
+```
+
+```
 
 
 
-
-### CAP 15 - 
+### CAP 15 - REST APIs and JSON
 
 
 
