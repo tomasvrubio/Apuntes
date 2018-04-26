@@ -2194,17 +2194,91 @@ module.exports = function(app){
 
 Y así iremos haciendo para ir cargando las rutas de las distintas funcionalidades de la aplicación. 
 
-```
 
+**Vistas que se renderizan solas**
+Si tenemos mucho contenido en la aplicación pero no tiene mucha funcionalidad podemos evitar tener que estar indicando cada una de las rutas. Para hacerlo podemos hacer lo siguiente, situando el código antes de del handler del 404:
 ```
+var autoViews = {};
+var fs = require('fs');
 
-```
-
+app.use(function(req,res,next){
+    var path = req.path.toLowerCase();
+    // check cache; if it's there, render the view
+    if(autoViews[path]) return res.render(autoViews[path]);
+    // if it's not in the cache, see if there's
+    // a .handlebars file that matches
+    if(fs.existsSync(__dirname + '/views' + path + '.handlebars')){
+        autoViews[path] = path.replace(/^\//, '');
+        return res.render(autoViews[path]);
+    }
+    // no view found; pass on to 404 handler
+    next();
+});
 ```
 
 
 
 ### CAP 15 - REST APIs and JSON
+
+En este capítulo no tenemos el navegador como el consumidor de nuestros servicios sino que van a ser otros programas, otras webs existentes en Internet. Vamos a añadir webservices a nuestra aplicación, que no hay problema de coexistencia con los servicios normales que hemos añadido hasta ahora. Hasta hace no mucho, con la aparición de los servicios RESTful, no ha sido una tecnología realmente accesible.
+
+**REST**: Representational State Transfer. RESTful es un adjetivo para describir un webservice que satisface los principios REST. El concepto básico es que REST representa una conexión sin estado entre cliente y servidor. Además el servicio puede estar cacheado y llamar a otros servicios tras la llamada inicial. 
+
+Primero hay que tener un plan de que queremos hacer. Por ejemplo, para la aplicación del libro, quiere cubrir los siguientes servicios:
+
+*GET /api/attractions*   
+Retrieves attractions. Takes lat, lng, and radius as querystring parameters and returns a list of attractions.
+
+*GET /api/attraction/:id*   
+Returns an attraction by ID.
+
+*POST /api/attraction*   
+Takes lat, lng, name, description, and email in the request body. The newly added attraction goes into an approval queue.
+
+*PUT /api/attraction/:id*   
+Updates an existing attraction. Takes an attraction ID, lat, lng, name, description, and email. Update goes into approval queue.
+
+*DEL /api/attraction/:id*   
+Deletes an attraction. Takes an attraction ID, email, and reason. Delete goes into approval queue.
+
+Como se puede ver se distinguirá entre servicios mediante los paths y los métodos HTTP utilizados. POST se suele utilizar para añadir un nuevo contenido y PUT para actualizar uno existente. 
+
+##### Reporte de errores en API
+Ante los distintos casos de respuesta se utilizan los siguientes códigos HTTP:
+
+* *Respuesta OK*: **Código 200**. 
+* *Error catastrófico*: Supone un estado inestable o desconocido en el servidor. Generalmente una excepción no controlada. Normalmente sólo se puede salir de este estado reiniciando el servidor. Puede ser un **código 500** pero si el fallo es general lo normal es que ni responda y de **TIMEOUT**. 
+* *Error recuperable*: Error controlado por el servidor, cuyo problema puede ser transitorio o bien permanente. Se responde a través de un **código 500**. 
+* *Error de cliente*: Generalmente porque el cliente ha omitido o introducido incorrectamente ciertos parámetros. Lo mejor es utilizar códigos 40X para responder estos errores: **404** (Not found), **400** (Bad Request), **401** (Unauthorized). Además el cuerpo de la respuesta deberá indicar por qué se está produciendo el error. Si el usuario estuviese solicitando una lista de cosas y no hay nada que devolver, no es un error, sino que se devolvería una lista vacía.
+
+
+**CORS**: Cross-Origin Resource Sharing. Permite recibir llamadas indicando que dominios están permitidos para ejecutar los scripts que indicamos. Instalamos el paquete (npm install --save cors). Para habilitarlo:
+```
+app.use(require('cors')());
+```
+
+Sólo lo aplicaremos donde sea necesario para no exponer partes que no deben. Para exponer el path */api*:
+```
+app.use('/api', require('cors')());
+```
+
+
+
+
+
+```
+
+```
+
+
+```
+
+```
+
+
+```
+
+```
 
 
 
