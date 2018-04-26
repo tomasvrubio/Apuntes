@@ -2263,6 +2263,121 @@ app.use('/api', require('cors')());
 ```
 
 
+**PRUEBAS**
+Las pruebas de APIs las haremos con **restler** (npm install --save-dev restler), aunque también se pueden hacer con postman. Introducimos el test en nuestra librería de tests (qa/tests-api.js):
+```
+var assert = require('chai').assert;
+var http = require('http');
+var rest = require('restler');
+
+suite('API tests', function(){
+
+    var attraction = {
+        lat: 45.516011,
+        lng: -122.682062,
+        name: 'Portland Art Museum',
+        description: 'Founded in 1892, the Portland Art Museum\'s colleciton ' +
+            'of native art is not to be missed.  If modern art is more to your ' +
+            'liking, there are six stories of modern art for your enjoyment.',
+        email: 'test@meadowlarktravel.com',
+    };
+
+    var base = 'http://localhost:3000';
+
+    test('should be able to add an attraction', function(done){
+        rest.post(base+'/api/attraction', {data:attraction}).on('success',
+                function(data){
+            assert.match(data.id, /\w/, 'id must be set');
+            done();
+        });
+    });
+
+    test('should be able to retrieve an attraction', function(done){
+        rest.post(base+'/api/attraction', {data:attraction}).on('success',
+                function(data){
+            rest.get(base+'/api/attraction/'+data.id).on('success',
+                    function(data){
+                assert(data.name===attraction.name);
+                assert(data.description===attraction.description);
+                done();
+            })
+        })
+    });
+
+});
+```
+
+Los tests tienen que ser independientes de sus ejecuciones por lo que siempre crearemos un elemento aunque ya hubiese corrido un test antes en que se hubiese creado ya. Funcionan con **promesas**. 
+
+**Crear una API** con express es tan fácil como:
+```
+var Attraction = require('./models/attraction.js');
+
+app.get('/api/attractions', function(req, res){
+    Attraction.find({ approved: true }, function(err, attractions){
+        if(err) return res.send(500, 'Error occurred: database error.');
+        res.json(attractions.map(function(a){
+            return {
+                name: a.name,
+                id: a._id,
+                description: a.description,
+                location: a.location,
+            }
+        }));
+    });
+});
+
+app.post('/api/attraction', function(req, res){
+    var a = new Attraction({
+        name: req.body.name,
+        description: req.body.description,
+        location: { lat: req.body.lat, lng: req.body.lng },
+        history: {
+            event: 'created',
+            email: req.body.email,
+            date: new Date(),
+        },
+        approved: false,
+    });
+    a.save(function(err, a){
+        if(err) return res.send(500, 'Error occurred: database error.');
+        res.json({ id: a._id });
+    });
+});
+
+app.get('/api/attraction/:id', function(req,res){
+    Attraction.findById(req.params.id, function(err, a){
+        if(err) return res.send(500, 'Error occurred: database error.');
+        res.json({
+            name: a.name,
+            id: a._id,
+            description: a.description,
+            location: a.location,
+        });
+    });
+});
+```
+
+Que ataca el modelo generado (*models/attraction.js*):
+```
+var mongoose = require('mongoose');
+
+var attractionSchema = mongoose.Schema({
+    name: String,
+    description: String,
+    location: { lat: Number, lng: Number },
+    history: {
+        event: String,
+        notes: String,
+        email: String,
+        date: Date,
+    },
+    updateId: String,
+    approved: Boolean,
+});
+var Attraction = mongoose.model('Attraction', attractionSchema);
+module.exports = Attraction;
+```
 
 
 
