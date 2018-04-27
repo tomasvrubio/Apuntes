@@ -2379,28 +2379,116 @@ var Attraction = mongoose.model('Attraction', attractionSchema);
 module.exports = Attraction;
 ```
 
-
-
+##### Usar un plugin REST
+Pese a que podemos crear la API utilizando sólo Express hay ventajas por hacerlo mediante un plugin de connect **connect-rest** (npm install --save connect-rest) y lo requeriremos en el archivo principal de nuestra aplicación:
+```
+var rest = require('connect-rest');
 ```
 
+Ponemos primero las rutas normales de la aplicación y luego irían las de la API (/api) y siempre antes del handler 404. 
+```
+// website routes go here
+
+// define API routes here with rest.VERB....
+
+// API configuration
+var apiOptions = {
+    context: '/api',
+    domain: require('domain').create(),
+};
+
+// link API into pipeline
+app.use(rest.rester(apiOptions));
+
+// 404 handler goes here
 ```
 
+> Para máxima separación entre API y aplicación lo mejor es utilizar un subdominio *api.nombre_aplicacion.com*.
 
+Los métodos de la API los añadimos entonces de la siguiente manera:
+```
+rest.get('/attractions', function(req, content, cb){
+    Attraction.find({ approved: true }, function(err, attractions){
+        if(err) return cb({ error: 'Internal error.' });
+        cb(null, attractions.map(function(a){
+            return {
+                name: a.name,
+                description: a.description,
+                location: a.location,
+            };
+        }));
+    });
+});
+
+rest.post('/attraction', function(req, content, cb){
+    var a = new Attraction({
+        name: req.body.name,
+        description: req.body.description,
+        location: { lat: req.body.lat, lng: req.body.lng },
+        history: {
+            event: 'created',
+            email: req.body.email,
+            date: new Date(),
+        },
+        approved: false,
+    });
+    a.save(function(err, a){
+        if(err) return cb({ error: 'Unable to add attraction.' });
+        cb(null, { id: a._id });
+    });
+});
+
+rest.get('/attraction/:id', function(req, content, cb){
+    Attraction.findById(req.params.id, function(err, a){
+        if(err) return cb({ error: 'Unable to retrieve attraction.' });
+        cb(null, {
+            name: attraction.name,
+            description: attraction.description,
+            location: attraction.location,
+        });
+    });
+});
 ```
 
+Las funciones REST toman tres parámetros: **request** como es normal, **content** que es el cuerpo parseado de la petición y **cb** que es una callback function que se utiliza para llamadas asíncronas de la API (por ejemplo llamar a la BBDD).
+
+Para reiniciar el servidor en caso de que estemos dando errores:
+```
+apiOptions.domain.on('error', function(err){
+    console.log('API domain error.\n', err.stack);
+    setTimeout(function(){
+        console.log('Server shutting down after API domain error.');
+        process.exit(1);
+    }, 5000);
+    server.close();
+    var worker = require('cluster').worker;
+    if(worker) worker.disconnect();
+});
 ```
 
-
-```
-
-```
+##### Usar un subdominio
+Al ser una parte separada de la aplicación es muy típico utilizar un subdominio para ofrecer una API (*api.aplicacion.com*). El habla de como habilitarlo a partir del fichero hosts del PC. ¿Pero como se sabe como llegar a tu PC cuando no estás en un entorno de Desarrollo? Mirar en internet como se hace de verdad.
 
 
 
-### CAP 16 - 
+### CAP 16 - Static Content
+
+Objetos que no van a cambiar entre petición y petición. Suelen ser objetos multimedia, CSS, javascript que ejecuta el cliente y archivos binarios de descarga. No metemos en este saco a HTML ya que si lo hiciésemos esas URLs se verían terminadas en .html y no queremos hacer eso, así que los implementaremos mediante vistas.
+
+Como manejas el contenido estático de tu web afecta mucho al **rendimiento** de la misma. Las dos principales premisas son reducir el número de peticiones y reducir el tamaño del contenido. 
+
+* **Número de peticiones**: Lo podemos reducir bien cacheando en el navegador o combinando recursos. Las imágenes pequeñas han de combinarse con el resto en un único sprite. Luego a través de CSS cogemos la parte que nos interesa de la imagen combinada (lo puedes crear a través de [SpritePad](https://wearekiss.com/spritepad)). 
+* **Tamaño contenido**: Se puede reducir sin pérdida (minificar CSS/JS y optimizar imágenes) o con ella (incrementar el nivel de compresión).
+
+
+
+
+
+
 
 
 
 ### DUDAS: 
 
 * ¿Por qué con node no se utiliza un servidor web por encima y con otros si que se utiliza un apache o lo que se necesite? ¿O estoy equivocado?
+* Como se monta un subdominio para publicar APIs.
