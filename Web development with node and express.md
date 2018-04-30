@@ -2558,7 +2558,144 @@ Las **cabeceras que utiliza el navegador** para saber cuando cachear un recurso 
 
 La funcionalidad respecto al manejo de estas cabeceras está **muy limitada por Express** (el middleware static no tiene en cuenta Last-Modified ni Etag). Si no queremos hacer uso de un CDN tendremos que utilizar un **proxy-server como Nginx**.
 
+**Cambiar el contenido estático**
+Aunque el cacheo tiene ventajas también tiene algún inconveniente. Si cambias tus recursos estáticos el cliente no verá los cambios hasta que no caduque la fecha en que los tiene cacheados. Google recomienda ponerles 1 mes de vigencia, incluso 1 año. Pero como no podemos tener a los usuarios desactualizados tanto tiempo lo que recomiendan es utilizar en el nombre un indicador de la versión y así evitar estos problemas (logo.png por logo-1.png cambiando las referencias en el código).
 
+**Bundling y Minification**
+El primero sirve para juntar distintos ficheros en uno solo, así reduciendo el número de peticiones. El segundo sirve para reducir el tamaño de los ficheros quitando todo lo que es innecesario (como espacios en blanco para hacerlo legible a los humanos) y acortar nombres de variables. **Grunt** nos ayudará a realizar estas tareas. Para hacer todo eso utilizaremos los siguientes módulos:
+```
+npm install --save-dev grunt-contrib-uglify
+npm install --save-dev grunt-contrib-cssmin
+npm install --save-dev grunt-hashres
+``` 
+
+Cargamos esas tareas en el gruntfile:
+```
+    [
+        // ...
+        'grunt-contrib-less',
+        'grunt-contrib-uglify',
+        'grunt-contrib-cssmin',
+        'grunt-hashres',
+    ].forEach(function(task){
+        grunt.loadNpmTasks(task);
+    });
+```
+
+Y luego preparamos las tareas:
+```
+    grunt.initConfig({
+        // ...
+        uglify: {
+            all: {
+                files: {
+                    'public/js/meadowlark.min.js': ['public/js/**/*.js']
+                }
+            }
+        },
+        cssmin: {
+            combine: {
+                files: {
+                    'public/css/meadowlark.css': ['public/css/**/*.css',
+                        '!public/css/meadowlark*.css']
+                }
+            },
+            minify: {
+                src: 'public/css/meadowlark.css',
+                dest: 'public/css/meadowlark.min.css',
+            }
+        },
+        hashres: {
+            options: {
+                fileNameFormat: '${name}.${hash}.${ext}'
+            },
+            all: {
+                src: [
+                    'public/js/meadowlark.min.js',
+                    'public/css/meadowlark.min.css',
+                ],
+                dest: [
+                    'views/layouts/main.handlebars',
+                ]
+            },
+        }
+    });
+};
+```
+
+Estas tareas hacen:
+
+* uglify: Combina todo el js de la web en un sólo fichero.
+* cssmin: Combina todos los ficheros css en uno sólo y al final lo minimiza.
+* hashres: Genera un hash que pone en las terminaciones de los ficheros y cambia las referencias que haya a los mismos en el código. 
+
+Tras haber generado los ficheros minimizados/unidos tendremos que cambiar las referencias en nuestro layout:
+```
+    <!-- ... -->
+    <script src="http://code.jquery.com/jquery-2.0.2.min.js"></script>
+    <script src="{{static '/js/meadowlark.min.js'}}"></script>
+    <link rel="stylesheet" href="{{static '/css/meadowlark.min.css'}}">
+</head>
+```
+
+Estas tareas tienen dependencias así que es importante hacerlas en orden:
+```
+grunt less
+grunt cssmin
+grunt uglify
+grunt hashres
+```
+
+Para no tener que recordar y hacer todo ese trabajo nos configuramos una nueva tarea (grunt static):
+```
+grunt.registerTask('default', ['cafemocha', 'jshint', 'exec']);
+grunt.registerTask('static', ['less', 'cssmin', 'uglify', 'hashres']);
+```
+
+Todo esto es muy ventajoso en Producción pero puede hacer que el trabajo de depuración sea muy complicado. Para solucionarlo lo ideal sería desactivar estos ajustes cuando se están realizando tareas de desarrollo.
+
+Primero crea un fichero de configuración (*config.js*):
+```
+module.exports = {
+    bundles: {
+
+        clientJavaScript: {
+            main: {
+                file: '/js/meadowlark.min.js',
+                location: 'head',
+                contents: [
+                    '/js/contact.js',
+                    '/js/cart.js',
+                ]
+            }
+        },
+
+        clientCss: {
+            main: {
+                file: '/css/meadowlark.min.css',
+                contents: [
+                    '/css/main.css',
+                    '/css/cart.css',
+                ]
+            }
+        }
+    }
+}
+```
+
+Para los JS especificamos el sitio donde queremos que se inserte. Ahora modificamos el fichero *views/layouts/main.handlebars*:
+```
+    <!-- ... -->
+    {{#each _bundles.css}}
+        <link rel="stylesheet" href="{{static .}}">
+    {{/each}}
+    {{#each _bundles.js.head}}
+        <script src="{{static .}}"></script>
+    {{/each}}
+</head>
+```
+
+Las **librerías de terceros** normalmente no se suele meter en los paquetes anteriormente mencionados. Es debido a que seguramente sean utilizadas por otras webs accedidas. A menos que llamemos a multitud de librerías externas que ya puede empezar a interesarnos.
 
 
 
