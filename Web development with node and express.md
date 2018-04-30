@@ -2481,8 +2481,82 @@ Como manejas el contenido estático de tu web afecta mucho al **rendimiento** de
 * **Tamaño contenido**: Se puede reducir sin pérdida (minificar CSS/JS y optimizar imágenes) o con ella (incrementar el nivel de compresión).
 
 
+##### Preparar tu sitio para el futuro
+Cuando pones en producción una página web lo normal es almacenar los estáticos en otro servidor especializado y no tenerlos junto al resto de la aplicación. Se utilizarán los **CDN (Content Delivery Network) para almacenarlos** ya que son elementos especializados en su almacenamiento y distribución, acelerando la entrega de los ficheros a los clientes demandantes. Cacheo, cercanía geográfica... son características que utilizan.
 
+A la hora de mapear los recursos lo haremos **indicando la ruta relativa**. Es decir, utilizar \<img src="/img/meadowlark\_logo.png" alt="Meadowlark Travel Logo"\> en vez de \<img src="//s3-us-west-2.amazonaws.com/meadowlark/img/meadowlark\_logo-3.png" alt="Meadowlark Travel Logo"\>. Utilizaremos **URLs de protocolo relativo**, que están con "//" en vez de "http://" o "https://".
 
+Para hacer el **path dinámico** en función de donde estemos almacenando el contenido estático crearemos el fichero *lib/static.js*:
+```
+var baseUrl = '';
+
+exports.map = function(name){
+        return baseUrl + name;
+}
+```
+
+Para **utilizarlo en vistas** haremos uso de los helpers:
+```
+// set up handlebars view engine
+var handlebars = require('express3-handlebars').create({
+    defaultLayout:'main',
+    helpers: {
+        static: function(name) {
+            return require('./lib/static.js').map(name);
+        }
+    }
+});
+```
+
+Y entonces podremos llamar a nuestros recursos de la siguiente manera:
+```
+<header><img src="{{static '/img/logo.jpg'}}"
+    alt="Meadowlark Travel Logo"></header>
+```
+
+Para **utilizarlo en CSS** tendremos que hacer uso de un preprocesador de CSS para poder utilizar variables. Podremos utilizar LESS, SASS, Stylus... Realiza un ejemplo con LESS, Grunt y una función de ayuda en el fichero de configuración *grunt.js*. 
+
+Para hacer uso de ello en los **JS estáticos de servidor** lo haremos a través de una función que nos realice el mapeo. Por ejemplo:
+```
+var static = require('./lib/static.js').map;
+
+app.use(function(req, res, next){
+        var now = new Date();
+        res.locals.logoImage = now.getMonth()==11 && now.getDate()==19 ?
+                static('/img/logo_bud_clark.png') :
+                static('/img/logo.png');
+        next();
+});
+```
+
+En nuestro fichero handlebars lo llamaremos de la siguiente manera:
+```
+<header><img src="{{logoImage}}" alt="Meadowlark Travel Logo"></header>
+``` 
+
+Para utilizarlo en **JS estáticos de cliente** jQuery se puede encargar de cambiar los recursos si es necesario, por ejemplo :
+``` 
+$(document).on('meadowlark_cart_changed', function(){
+        $('header img.cartIcon').attr('src', cart.isEmpty() ?
+                IMG_CART_EMPTY : IMG_CART_FULL );
+});
+``` 
+
+Con la variables definidas *views/layouts/main.handlebars*:
+``` 
+<!-- ... -->
+<script>
+    var IMG_CART_EMPTY = '{{static '/img/shop/cart_empty.png'}}';
+    var IMG_CART_FULL = '{{static '/img/shop/cart_full.png'}}';
+</script>
+``` 
+
+Las **cabeceras que utiliza el navegador** para saber cuando cachear un recurso son:
+
+* **Expires**: Le dicen al navegador cuanto tiempo pueden llegar a cachear un recurso. El navegador respeta estos tiempos a menos que se borre la caché manualmente por el usuario, el navegador libere espacio porque se ha quedado sin recursos disponibles o algo similar. Esto mejorará el resultado, sobretodo en navegación móvil. Si no ha pasado el tiempo no se mandará ninguna petición al servidor por ese recurso.
+* **Last-Modified**/**ETag**: La última vez que fue modificado un recurso y un id de versión del recurso. Se mandará una petición GET al servidor que será respondida con estas dos cabeceras. Si coinciden con el valor que tenemos no solicitaremos el recurso al servidor. 
+
+La funcionalidad respecto al manejo de estas cabeceras está **muy limitada por Express** (el middleware static no tiene en cuenta Last-Modified ni Etag). Si no queremos hacer uso de un CDN tendremos que utilizar un **proxy-server como Nginx**.
 
 
 
