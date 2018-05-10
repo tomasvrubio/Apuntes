@@ -2699,6 +2699,508 @@ Las **librerías de terceros** normalmente no se suele meter en los paquetes ant
 
 
 
+### CAP 17 - Implementing MVC in Express
+
+MVC (modelo vista-controlador) es un paradigma de la programación introducido en 1970 y que ha visto su resurgir gracias al desarrollo web. Este paradigma facilita el arranque de los proyectos y lo hace más independiente del lenguaje utilizado. Desglosa la funcionalidad en entornos claramente diferenciados, dando un framework común sobre el que construir software. Los tres elementos son:
+
+* **Modelo:** La lógica y como están organizados los datos. 
+* **Vista:** La parte que ve el usuario y con la que interactúa. 
+* **Controlador:** A través del cuál manipula el modelo y elige que vista visualizar.
+
+**Modelo**
+Tus modelos son el corazón del proyecto. Es muy importante definirlos correctamente para que el resto vaya rodado. En un mundo ideal la capa de persistencia estaría totalmente separada del modelo, pero como es algo que requiere mucho trabajo no suelen estar tan separadas. En este libro se utilizado Mongoose para definir los modelos que utiliza la aplicación. La lógica y datos del proyecto deberán ir dentro de la carpeta *models/*. Por ejemplo las relaciones de cliente (*models/costumer.js*):
+``` 
+var mongoose = require('mongoose');
+var Orders = require('./orders.js');
+
+var customerSchema = mongoose.Schema({
+        firstName: String,
+        lastName: String,
+        email: String,
+        address1: String,
+        address2: String,
+        city: String,
+        state: String,
+        zip: String,
+        phone: String,
+        salesNotes: [{
+                date: Date,
+                salespersonId: Number,
+                notes: String,
+        }],
+});
+
+customerSchema.methods.getOrders = function(){
+        return Orders.find({ customerId: this._id });
+};
+
+var Customer = mongoose.model('Customer', customerSchema);
+modules.export = Customer;
+```
+
+
+**Vista**
+Si hay que mostrar algo en una vista lo que hay que hacer es crear una vista y no modificar el modelo. En esa vista elegiremos la información que queremos mostrar del modelo y cómo. Para mostrar información sobre los clientes y las órdenes que tienen (*viewModels/customer.js*):
+```
+var Customer = require('../model/customer.js');
+
+// convenience function for joining fields
+function smartJoin(arr, separator){
+        if(!separator) separator = ' ';
+        return arr.filter(function(elt){
+                return elt!==undefined &&
+                        elt!==null &&
+                        elt.toString().trim() !== '';
+        }).join(separator);
+}
+
+module.exports = function(customerId){
+        var customer = Customer.findById(customerId);
+        if(!customer) return { error: 'Unknown customer ID: ' +
+                req.params.customerId };
+        var orders = customer.getOrders().map(function(order){
+                return {
+                        orderNumber: order.orderNumber,
+                        date: order.date,
+                        status: order.status,
+                        url: '/orders/' + order.orderNumber,
+                }
+        });
+        return {
+                firstName: customer.firstName,
+                lastName: customer.lastName,
+                name: smartJoin([customer.firstName, customer.lastName]),
+                email: customer.email,
+                address1: customer.address1,
+                address2: customer.address2,
+                city: customer.city,
+                state: customer.state,
+                zip: customer.zip,
+                fullAddress: smartJoin([
+                        customer.address1,
+                        customer.address2,
+                        customer.city + ', ' +
+                                customer.state + ' ' +
+                                customer.zip,
+                ], '<br>'),
+                phone: customer.phone,
+                orders: customer.getOrders().map(function(order){
+                        return {
+                                orderNumber: order.orderNumber,
+                                date: order.date,
+                                status: order.status,
+                                url: '/orders/' + order.orderNumber,
+                        }
+                }),
+        }
+}
+``` 
+
+Para seleccionar (o descartar) que información queremos mostrar también podemos utilizar la librería **underscore** que facilita la tarea. 
+
+
+**Controlador**
+El responsable de manejar la interacción del usuario y elegir las vistas apropiadas en función de las elecciones del usuario. Es **como el enrutado pero agrupando por funcionalidad**. El controlador para ver y editar la información de usuario (*controllers/customer.js*):
+``` 
+var Customer = require('../models/customer.js');
+var customerViewModel = require('../viewModels/customer.js');
+
+exports = {
+
+        registerRoutes: function(app) {
+                app.get('/customer/:id', this.home);
+                app.get('/customer/:id/preferences', this.preferences);
+                app.get('/orders/:id', this.orders);
+
+                app.post('/customer/:id/update', this.ajaxUpdate);
+        }
+
+        home: function(req, res, next) {
+                var customer = Customer.findById(req.params.id);
+                if(!customer) return next();    // pass this on to 404 handler
+                res.render('customer/home', customerViewModel(customer));
+        }
+
+        preferences: function(req, res, next) {
+                var customer = Customer.findById(req.params.id);
+                if(!customer) return next();    // pass this on to 404 handler
+                res.render('customer/preferences', customerViewModel(customer));
+        }
+
+        orders: function(req, res, next) {
+                var customer = Customer.findById(req.params.id);
+                if(!customer) return next();    // pass this on to 404 handler
+                res.render('customer/preferences', customerViewModel(customer));
+        }
+
+        ajaxUpdate: function(req, res) {
+                var customer = Customer.findById(req.params.id);
+                if(!customer) return res.json({ error: 'Invalid ID.'});
+                if(req.body.firstName){
+                        if(typeof req.body.firstName !== 'string' ||
+                                req.body.firstName.trim() === '')
+                                return res.json({ error: 'Invalid name.'});
+                        customer.firstName = req.body.firstName;
+                }
+                // and so on....
+                customer.save();
+                return res.json({ success: true });
+        }
+}
+```
+
+Con la actualización AJAX, y siempre que modifiquemos información en el servidor a través de formularios, debemos validar los campos para que no nos puedan hacer posibles ataques  
+
+
+
+
+### CAP 18 - Security
+
+Mantener seguridad de la aplicación o bien autenticar al usuario para mantener información personal.
+
+##### HTTPS
+Encriptar los paquetes que viajan por la red. Es la base sobre la que montar la autenticación en tu página web. Se basa en los certificados SSL, los cuales puedes conseguirlos de un CA gratuito, de un CA de pago o bien hacerlo tu mismo. 
+
+* **Propio:** Desarrollo, testeo o bien una intranet. Al no darlo como seguro el navegador la gente iba a ver el mensaje de alerta y no va a confiar en el sitio. Para poder generarlo necesitas **openssl**. También puedes conseguir certificados en [http://www.selfsignedcertificate.com](SelfSignedCertificate).
+* **CA gratuito:** Hay opciones pero no son realmente útiles ya que sólo funcionando con Firefox. [http://www.cacert.org/](CACert).
+* **CA pago:** Prácticamente todos pertenecen a 4 grandes empresas: Symantec, Comodo, Go Daddy y GlobalSign. Una forma de abaratarlo es comprarlo a un revendedor (~10$). Se pueden comprar al proveedor de hosting. 
+
+Al final tendremos una **clave privada** y un **certificado**. Los almacenaremos en el subdirectorio *ssl/* y será tan fácil como arrancar el servidor de la siguiente manera:
+```
+var https = require('https');   // usually at top of file
+
+var options = {
+        key: fs.readFileSync(__dirname + '/ssl/meadowlark.pem');
+        cert: fs.readFileSync(__dirname + '/ssl/meadowlark.crt');
+};
+
+https.createServer(options, app).listen(app.get('port'), function(){
+        console.log('Express started in ' + app.get('env') +
+                ' mode on port ' + app.get('port') + '.');
+});
+```
+
+El puerto por defecto para HTTP es el 80 y para HTTPS es el 443. Para levantar cualquier puerto en Linux entre el 0-1024 se requiere hacerlo con SUDO ya que necesita de privilegios. Una forma de evitarlo es poniendo un proxy que hable con el servidor por el puerto que tenga levantado. 
+
+Si tuviesemos un proxy, la comunicación HTTPS sería entre cliente y proxy. De proxy a servidor web ya está en un entorno seguro por lo que será HTTP. Si se utiliza un proxy no hay que olvidarse de indicarlo a Express (app.enable('trust proxy')).
+
+##### CSRF - Cross-Site Request Forgery
+Utilizar sesiones logadas en un navegador desde otra aplicación. Para evita esto hay que indicar de alguna manera que la petición viene de tu propia aplicación y eso lo hacen mediante el uso de un **token**. Para ello utilizamos el middleware **surf** (npm install --save csurf) y lo linkamos:
+```
+// this must come after we link in cookie-parser and connect-session
+app.use(require('csurf')());
+app.use(function(req, res, next){
+        res.locals._csrfToken = req.csrfToken();
+        next();
+});
+```
+
+Y habrá que incluirlo en todos los formularios o llamadas AJAX:
+```
+<form action="/newsletter" method="POST">
+        <input type="hidden" name="_csrf" value="{{_csrfToken}}">
+        Name: <input type="text" name="name"><br>
+        Email: <input type="email" name="email"><br>
+        <button type="submit">Submit</button>
+</form>
+``` 
+
+Para las APIs utilizaremos **API key** de connect-rest.
+
+
+##### Authentication
+Recomienda no hacer nada por uno mismo a menos que se sea un experto, ya que se tiene mucho que perder. Distinguir entre **autenticación** (comprobar que alguien es quién dice) y **autorización** (que es lo que puede hacer un usuario). Va a enseñar como hacer un sistema de autorización muy básico en el que sólo hay cliente/empleado. Hay varios tipos:
+
+* **Autenticación a partir de terceros** Utilizar la cuenta que ya tengan de otro servicio. Dos tipos: federated authentication (SAML / OpenID) y delegated authentication (OAuth). Es amigable hacia los usuarios. Hay sitios donde se permite esto o si el usuario lo desea generar un usuario en la web.  
+* **Guardar usuarios en la BBDD** Guardar toda la información de los usuarios en la BBDD o sino al menos parte de ella si es que se logan con terceros. Podemos utilizar el siguiente modelo para usuarios:
+
+```
+var mongoose = require('mongoose');
+
+var userSchema = mongoose.Schema({
+        authId: String,
+        name: String,
+        email: String,
+        role: String,
+        created: Date,
+});
+
+var User = mongoose.model('User', userSchema);
+module.exports = User;
+```
+
+**Passport**
+Módulo popular y robusto de autenticación para Express. No está atado a ningún tipo de autenticación en especial.
+
+Para el caso de autenticación de terceros la password nunca está en nuestra aplicación sino que todo recae en redirecciones. 
+
+*IMAGEN WDNE-passport-authoritation* 
+
+*IMAGEN WDNE-passport-interactions*
+
+Los distintos pasos que importan son:
+
+* **Página de login:** Es donde el usuario escoge la manera de autenticarse. Si es directamente en la aplicación tendrá un cajetín y si es a base de terceros tendrá un link para ir a su plataforma. Es a donde se llevará cuando se intente acceder a una página sin permisos.
+* **Construcción de la petición de autenticación:** Donde se crea la petición de redirección para ir a la plataforma de terceros. Aquí es donde indicamos que es lo que queremos obtener de la información del usuario en ese sistema.
+* **Comprobar respuesta de autenticación**: Si el usuario autoriza tu aplicación recibirás una respuesta de autenticación válida de la plataforma de terceros. Para el siguiente paso tendremos que tener un registro de que el usuario está autenticado (normalmente se guarda en una sesión con el ID del usuario).
+* **Comprobar autenticación:** Ahora ya validaremos contra el objeto de nuestra BBDD *User* para saber qué le está permitido hacer al usuario.
+
+
+##### Ejemplo de como hacer login con Facebook
+Lo primero que tienes que hacer es asociar tu web con la app de Facebook para dar permisos sobre la cuenta que se utilizará como origen de las peticiones de autenticación. Lo que habría que instalar para este caso serían los módulos **passport** y **passport-facebook** (npm install --save passport passport-facebook). 
+
+Todo el código de autenticación lo pondremos en un fichero aparte para no mezclar cosas (*lib/auth.js*). 
+
+Importante hacer volver al usuario donde estaba antes de logarse con la plataforma externa. Mejorará la experiencia de usuario.
+
+
+##### Autorización basada en roles
+Para permitir la visualización de ciertas páginas exclusivamente a determinados roles. 
+
+Para lo que queremos que se vea como cliente:
+``` 
+function customerOnly(req, res){
+        var user = req.session.passport.user;
+        if(user && req.role==='customer') return next();
+        res.redirect(303, '/unauthorized');
+}
+``` 
+
+Y como empleado (tenemos que evitar dar pistas sobre páginas no autorizadas y que pueden tener información sensible, por eso el next('route')):
+``` 
+function employeeOnly(req, res, next){
+        var user = req.session.passport.user;
+        if(user && req.role==='employee') return next();
+        next('route');
+}
+``` 
+
+Y ponemos las rutas de cada uno:
+``` 
+// customer routes
+app.get('/account', customerOnly, function(req, res){
+        res.render('account');
+});
+app.get('/account/order-history', customerOnly, function(req, res){
+        res.render('account/order-history');
+});
+app.get('/account/email-prefs', customerOnly, function(req, res){
+        res.render('account/email-prefs');
+});
+
+// employer routes
+app.get('/sales', employeeOnly, function(req, res){
+        res.render('sales');
+});
+``` 
+
+La autorización se puede hacer de muchas maneras. Por ejemplo:
+``` 
+function allow(roles) {
+        var user = req.session.passport.user;
+        if(user && roles.split(',').indexOf(user.role)!==-1) return next();
+        res.redirect(303, '/unauthorized');
+}
+
+app.get('/account', allow('customer,employee'), function(req, res){
+        res.render('account');
+});
+```
+
+
+
+### CAP 19 - Integrating with Third-Party APIs
+
+Las webs ya no suelen ser completas por si mismas, sino que utilizan funcionalidades de webs de terceros. Por ejemplo las redes sociales o las aplicaciones de geolocalización.
+
+Muy importante cuidarse de cuantas peticiones hacemos desde nuestra página. Podemos hacer que aumente el tiempo de carga o el consumo de datos en redes móviles.
+
+Tendremos que utilizar las APIs que proporcionan para llamar a funciones como publicar un tweet o conseguir las ultimas historias de un usuario. Es posible que esas APIs ya estén cacheadas en el navegador y que no haya que descargarlas.    
+
+
+##### Redes sociales
+Aunque las peticiones a la API se pueden hacer desde el FrontEnd, lo recomendable es hacerlo desde el Backend para cachear información o bien añadir funcionalidades como descartar elementos indeseados. Para poder utilizar esas APIs tendremos que crear un token en las páginas de desarrollo de los servicios que queremos utilizar. Nunca hay que pasar la clave hacia el usuario o podría haber gente que la utilizase para hacer llamadas maliciosas. 
+
+El código que generemos lo pondremos en un fichero aparte (por ejemplo */lib/twitter.js*) y siempre haremos algo similar a lo siguiente (lo que no devolvamos sólo se ejecutará la primera vez, como por ejemplo conseguir el token):
+``` 
+var https = require('https');
+
+module.exports = function(twitterOptions){
+
+        // this variable will be invisible outside of this module
+        var accessToken;
+
+        // this function will be invisible outside of this module
+        function getAccessToken(cb){
+                if(accessToken) return cb(accessToken);
+                // TODO: get access token
+        }
+
+        return {
+                search: function(query, count, cb){
+                        // TODO
+                },
+        };
+};
+```
+
+Y luego consumiremos los servicios de la siguiente manera (con las credenciales en *credentials.js*):
+```
+var twitter = require('./lib/twitter')({
+        consumerKey: credentials.twitter.consumerKey,
+        consumerSecret: credentials.twitter.consumerSecret,
+});
+
+twitter.search('#meadowlarktravel', 10, function(result){
+        // tweets will be in result.statuses
+});
+```
+
+Conseguir por tanto el token lo haríamos de la siguiente manera en función de lo que indica la documentación de Twitter:
+```
+function getAccessToken(cb){
+    if(accessToken) return cb(accessToken);
+
+    var bearerToken = Buffer(
+        encodeURIComponent(twitterOptions.consumerKey) + ':' +
+        encodeURIComponent(twitterOptions.consumerSecret)
+    ).toString('base64');
+
+    var options = {
+        hostname: 'api.twitter.com',
+        port: 443,
+        method: 'POST',
+        path: '/oauth2/token?grant_type=client_credentials',
+        headers: {
+            'Authorization': 'Basic ' + bearerToken,
+        },
+    };
+
+    https.request(options, function(res){
+        var data = '';
+        res.on('data', function(chunk){
+            data += chunk;
+        });
+        res.on('end', function(){
+            var auth = JSON.parse(data);
+            if(auth.token_type!=='bearer') {
+                console.log('Twitter auth failed.');
+                return;
+            }
+            accessToken = auth.access_token;
+            cb(accessToken);
+        });
+    }).end();
+}
+```
+
+Y realizar búsquedas lo haríamos de la siguiente manera:
+```
+search: function(query, count, cb){
+        getAccessToken(function(accessToken){
+                var options = {
+                        hostname: 'api.twitter.com',
+                        port: 443,
+                        method: 'GET',
+                        path: '/1.1/search/tweets.json?q=' +
+                                encodeURIComponent(query) +
+                                '&count=' + (count || 10),
+                        headers: {
+                                'Authorization': 'Bearer ' + accessToken,
+                        },
+                };
+                https.request(options, function(res){
+                        var data = '';
+                        res.on('data', function(chunk){
+                                data += chunk;
+                        });
+                        res.on('end', function(){
+                                cb(JSON.parse(data));
+                        });
+                }).end();
+        });
+},
+```
+
+Habrá situaciones en las que tendremos que esperar a que finalicen llamadas asíncronas. Para ello utilizaremos **Promesas** (**Q** antes de que existiese en JS).
+
+*Introducir WDNE-api-promises*
+
+
+##### Geolocalización
+Se refiere al hecho de cambiar direcciones de calles o nombres de sitios por las coordenadas geográficas que les representen. Si extraes información de la API de un proveedor (google, bing...) debes mostrar la información en sus mapas.
+
+
+
+### CAP 20 - Debugging
+
+Podría llamarse Explorar en vez de Depurar ya que es algo que estaremos utilizando todo el rato no sólo para arreglar cosas sino para descubrir como funciona algo, implementar nuevas funciones... 
+
+El primer paso para depurar parte de la premisa de que se puede eliminar como posible causa del problema que ese está teniendo. Eso hará que sea menor el área que tengamos que observar para encontrar la causa origen. La eliminación puede hacerse de varias maneras: comentando código, test unitarios, analizando tráfico para saber si es problema de servidor o de cliente, ir cambiando la entrada al programa hasta que se da con una que falla, utilizar el Control de Versiones hacia atrás hasta que el problema desaparece o hacer bocetos de la funcionalidad para eliminar subsistemas complejos. 
+
+##### REPL
+Se trata de la consola, bien node o bien en el navegador, para poder probar trocitos de código. Utilizar console.log para ver el contenido de objetos, puntos alcanzados...
+
+##### Depurador integrado en Node
+Lo lanzamos ejecutando:
+```
+node debug nombre_app.js
+```
+
+En la consola podremos ver mensajes del depurador y podremos escribir *help* para que nos de una lista de comandos a utilizar. Ese depurador se levantará por defecto contra el **puerto 5858** al que podremos acceder con aplicaciones como **Node Inspector**.
+
+```
+sudo npm install -g node-inspector
+```
+
+Y luego lo lanzamos en background sin parámetros. A partir de entonces podemos lanzar la app en debug (si lo hacemos con --debug no pintará nada por consola). Para acceder al depurador tendrás que dirigirte a la web que indica la herramienta *http://localhost:8080/debug?port=5858*. Con esto podremos ir poniendo y quitando breakpoints, viendo por donde se encuentra en el código, acceder a un terminal en tiempo real con la aplicación, cambiar valores de variables... Podemos vigilar cosas en concreto con **watch expressions**, con **call stack** ver de como hemos llegado hasta donde estamos, **scope variables** que te dice lo que contiene actualmente el scope. 
+
+Si queremos ver como arranca la aplicación tendremos que parar la carga desde el principio mediante:
+```
+node --debug-brk meadowlark.js
+```
+
+
+
+### CAP 21 - Going live
+
+
+
+
+
+```
+
+```
+
+
+```
+
+```
+
+```
+
+```
+
+
+
+```
+
+```
+
+
+```
+
+```
+
+
+### CAP 22 - 
+
+
+
+### CAP 23 - 
+
+
+
 ### DUDAS: 
 
 * ¿Por qué con node no se utiliza un servidor web por encima y con otros si que se utiliza un apache o lo que se necesite? ¿O estoy equivocado?
