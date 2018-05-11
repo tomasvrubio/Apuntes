@@ -3164,40 +3164,98 @@ node --debug-brk meadowlark.js
 
 ### CAP 21 - Going live
 
+Y de repente un día tu sitio se encuentra corriendo en Internet.
+
+##### Registro de Dominio y Hosting
+Un nombre de dominio es como si fuera el nombre de la empresa y la dirección IP es como si fuera la dirección física. Los **dominios** crean la relación entre esos dos conceptos. Esta relación se hace a través de los **DNS**. Que te roben el dominio puede hacer un destrozo serio en tus planes por lo que hay que buscar un dominio de calidad (y no suelen ser caros). El **recomienda** *name* y *namecheap.com*.
+
+**Hosting** por otro lado indica el servidor donde se aloja tu sitio web. Podríamos decir que son los edificios físicos que verías cuando llegases a la dirección física.
+
+Los dominios se dividen en:
+
+* General TLDs: .com, .net, .gov, .edu,.fed, .mil. De ahí sólo los dos primeros se pueden adquirir libremente. 
+
+* Country Code TLDs: .us, .es, .uk. Con estos se pueden hacer dominios muy interesantes (por ejemplo goo.gl). 
+
+**Subdominios** se trata del www de antes del dominio. El autor recomienda no poner nada, es decir, mejor *http://meadowlarktravel.com/* que *http://www.meadowlarktravel.com/*. También se puede utilizar por razones técnicas (usas un servidor diferente para esa parte) para acceder a sitio móvil *m.tu_sitio.com*, las apis *api.tu_sitio.com*... Otro útil es para tener la administración separada *admin.tu_sitio.com*. **El registro de Dominio**, a menos que especifiques lo contrario, **redireccionará todo el tráfico a tu servidor sin importar el subdominio**. Ya ahí serás tú quién vea como actuar.
+
+**Nameservers** son a quienes van los registros de Dominio a preguntar por donde está el servidor que da servicio a la web. Esto lo tendremos que utilizar si nuestro hosting nos dá una *ip dinámica*. Si fuese *estática* podríamos ir directamente al servidor donde está alojado saltando un paso intermedio.
+
+**Para implantar los ficheros** utilizar **GIT** de cualquiera de los que dan servicio (github, bitbucket...). Lo mejor es tener una rama que sea **production**, otra que sea **master** y las que se necesiten de **stagging** para ir desarrollando nuevas partes de la aplicación o corrigiendo problemas. De master iremos a los distintos stagging, de los cuales haremos merge con el master una vez estén terminados. Cuando estemos listos para llevarlo a producción introduciremos esos cambios en la rama production. Como production será una rama de sólo lectura podremos volver atrás en el tiempo si alguna vez tenemos problemas sin miedo a perder cambios realizados. 
+
+Si estuviésemos trabajando con **Azure** es capaz de detectar cuando ha habido cambios en production y actualizar automáticamente el código, o si han cambiado las dependencias de package.json instalará automáticamente los nuevos paquetes. Esto lo puedes **hacer manualmente** con un script que haga **git pull --ff-only** periódicamente y si llega a traer nuevo código se encargue de instalar los nuevos paquetes y reiniciar el servidor.
 
 
 
+### CAP 22 - Maintenance
 
+Una vez la aplicación está online viene el trabajo no reconocido.
+
+* Ten un plan de longevidad: El sitio tendrá una vida determinada (dice que como máximo 7 años para seguir siendo usable). Hay que hacer algo que se mantenga bien en el tiempo. Si el presupuesto es bajo habrá que hacer algo reutilizable con otros proyectos. Si el presupuesto es alto habrá que hacer algo excepcional. 
+* Utilizar control de versiones: Saber quién y cuando hizo algo. Poder preguntar por qué.
+* Utilizar un issue tracker: Registra todos los problemas que se han tenido, las dudas, quién lo arregló, el commit que se realizó para quitarlo... Y utiliza una herramienta que conlleve el mínimo trabajo.
+* Mantener buena higiene: Utilizar todo lo anterior e ir haciendo revisiones periódicas para ver que mejoras se pueden ir sacando por problemas recurrentes. 
+* No procastinar: Tener claro lo que se hace y si se repite varias veces en el tiempo ver la manera de automatizarlo. Cuestionarse las tareas.
+* Chequear QA periódicamente: Tenerlos documentados para que puedan realizarse por una persona no técnica o incluso el cliente pueda leerlos. También es útil *https://www.google.com/webmasters* y *http://www.bing.com/toolbox/webmaster* para saber como ven el sitio los buscadores.
+* Monitor de analíticas: Google Analitics es gratuito y da una idea de como están utilizando el sitio los usuarios. 
+* Mejoras de rendimiento: Acelerar el sitio. Google Analitics también nos dará información sobre ello.
+* A la hora de recoger datos: En los formularios mejor utilizar AJAX que JS ya que funcionará igualmente en caso de que deshabiliten JS (ten siempre un parámetro *action* en el form). Utilizar la URL del parámetro action: *$('form').on('submit', function(evt){ evt.preventDefault(); var action = $(this).attr(\'action'); /\* perform AJAX submission \*/ });.*. En caso de fallos está bien tener un nivel de redundancia bien en un fichero, en otra BBDD, en email... En caso de fallo total habría que hablar con el usuario para que bien lo intente luego o avise al staff. En vez de comprobar por un error busca una confirmación positiva (añade una propiedad *success*).
+* Logging: Ocúpate de escribir lo que es útil, revisa lo logs que escriben lo que piensas. Ten costumbre de mirarlos e instruye a la gente a hacerlo. 
+
+##### Reutilización de código
+Bien a través de los **módulos** o de un **registro privado npm** en Node o del **middleware** en Express podemos hacer código reusable que sea realmente fácil de reutilizar. 
+
+Como no se puede tener un package.json que tire de dos fuentes diferentes lo mejor que podemos hacer es utilizar **sinopia** que es un proxy que se pone entre medias y que detecta aquellos paquetes que son privados y que no tiene que ir al registro central de npm.
+
+Para **crear un middleware** es tan fácil como (*meadowlark-stuff*):
+```
+module.exports = function(config){
+        // it's common to create the config object
+        // if it wasn't passed in:
+        if(!config) config = {};
+
+        return function(req, res, next){
+            // your middleware goes here...remember to call next()
+            // or next('route') unless this middleware is expected
+            // to be an endpoint
+            next();
+        }
+}
 ```
 
+Y lo llamamos con:
 ```
+var stuff = require('meadowlark-stuff')({ option: 'my choice' });
 
-
-```
-
-```
-
-```
-
+app.use(stuff);
 ```
 
 
 
-```
+### CAP 23 - Additional resources
 
-```
+Hemos tocado muchos palos pero aunque parezca bastante esto es solo la superficie. Para profundizar:
 
+##### Documentación Online
 
-```
+* [MDN](https://developer.mozilla.org/en-US/#): Para documentación de JS, HTML y CSS. JS sin ninguna duda ahí.
+* [Living Standard HTML5 Specification](http://developers.whatwg.org/): Para temas complicados de HTML.
+* [Tabla compatibilidades](http://kangax.github.io/compat-table/es6/): Para saber que características de cada versión JS se soporta en los navegadores.
 
-```
+##### Suscripciones
 
+* [JavaScript Weekly](javascriptweekly)
+* [Node Weekly](https://nodeweekly.com/)
+* [HTML5 Weekly](https://frontendfoc.us/)
 
-### CAP 22 - 
+##### Stack Overflow
 
+Sitio de preguntas/respuestas técnicas basado en la reputación. Muy útil para resolver dudas (tanto lo que ya se ha preguntado como lo que puedes preguntar tu mismo) y para ganar reputación a base de responder preguntas.
 
+##### Publicar/Contribuir 
 
-### CAP 23 - 
+Puedes contribuir en los proyectos de las herramientas que utilices a través de github. También puedes aportar middleware de Express/Connect a la comunidad a través de NPM (pero no significa que publiques cualquier cosa). 
+
 
 
 
